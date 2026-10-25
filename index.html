@@ -2984,12 +2984,17 @@ window.addEventListener("scroll", hideTip, {passive:true});
 
 /* ---------- Startbildschirm und Spieler-Version ---------- */
 let MODE = null; try{ MODE = localStorage.getItem("mode"); }catch(_){}
-function setMode(m){ MODE = m; try{ m ? localStorage.setItem("mode", m) : localStorage.removeItem("mode"); }catch(_){} render(); }
+// Ein Gerät, das einen Aufbau per Link übernommen hat, ist ein Spieler-Gerät: keine Spielleiter-Ansicht bis zum Zurücksetzen
+const isLocked = () => { try{ return localStorage.getItem("locked") === "1"; }catch(_){ return false; } };
+if (MODE === "spielleiter" && isLocked()) MODE = "spieler";
+function setMode(m){
+  if (m === "spielleiter" && isLocked()) m = "spieler"; MODE = m; try{ m ? localStorage.setItem("mode", m) : localStorage.removeItem("mode"); }catch(_){} render(); }
 function renderStart(){
   document.getElementById("tabs").innerHTML = ""; document.getElementById("modeBtn").hidden = true;
   document.getElementById("phaseLbl").textContent = "Wer bist du heute?";
   document.getElementById("view").innerHTML = `<div class="start">
-    <button class="card" data-mode="spielleiter"><span class="disc">${icon("glockenturm")}</span><h2>Spielleiter</h2><span class="muted">Grimoire, Gespräche, Nacht auflösen, Abstimmungen</span></button>
+    ${isLocked() ? `<div class="card" style="text-align:center;padding:22px 16px"><span class="disc" style="width:110px;display:inline-flex;filter:grayscale(1);opacity:.5">${icon("glockenturm")}</span><h2>Spielleiter gesperrt</h2><span class="muted small">Dieses Gerät hat einen Aufbau als Spieler übernommen. Die Spielleiter-Ansicht öffnet sich erst wieder nach „Zurücksetzen“, das alles auf diesem Gerät löscht.</span></div>`
+    : `<button class="card" data-mode="spielleiter"><span class="disc">${icon("glockenturm")}</span><h2>Spielleiter</h2><span class="muted">Grimoire, Gespräche, Nacht auflösen, Abstimmungen</span></button>`}
     <button class="card" data-mode="spieler"><span class="disc">${icon("notizbuch")}</span><h2>Spieler</h2><span class="muted">Mitspieler, Behauptungen, Verdacht und deine eigenen Infos</span></button></div>
     <p class="small muted" style="text-align:center;margin-top:16px">Du kannst oben jederzeit wechseln. Beide Bereiche speichern getrennt auf diesem Gerät.</p>`;
 }
@@ -3010,7 +3015,7 @@ function renderPlayer(){
   document.getElementById("phaseLbl").textContent = `Spieler · ${Q.script === "alle" ? "Alle Rollen" : scriptOf(Q.script).name}` + (Q.players.length ? ` · ${living} von ${Q.players.length} leben` : "");
   const v = document.getElementById("view");
   const d = window._share, sc = d && (d.s === "custom" ? CUSTOM : scriptOf(d.s));
-  const offer = d ? `<div class="card" id="shareOffer" style="border-color:var(--brass);margin-bottom:10px"><h3>Aufbau vom Spielleiter</h3><p class="small">${esc(sc.name)} · ${d.p.length} Spieler: ${d.p.map(esc).join(", ")}</p>${(d.x||[]).length ? `<p class="small">Tot: <b>${d.x.map(i => esc(d.p[i])).join(", ")}</b></p>` : ""}<p class="small muted">Deine Notizen zu Spielern mit gleichem Namen bleiben erhalten.</p><div class="row"><button class="btn pri" data-pact="takeShare">Übernehmen</button><button class="btn" data-pact="dropShare">Ignorieren</button></div></div>` : "";
+  const offer = d ? `<div class="card" id="shareOffer" style="border-color:var(--brass);margin-bottom:10px"><h3>Aufbau vom Spielleiter</h3><p class="small">${esc(sc.name)} · ${d.p.length} Spieler: ${d.p.map(esc).join(", ")}</p>${(d.x||[]).length ? `<p class="small">Tot: <b>${d.x.map(i => esc(d.p[i])).join(", ")}</b></p>` : ""}<p class="small muted">Deine Notizen zu Spielern mit gleichem Namen bleiben erhalten. Danach ist die Spielleiter-Ansicht auf diesem Gerät gesperrt.</p>${S.players.length && !isLocked() ? `<p class="hint bad small">Auf diesem Gerät ist ein Spielleiter-Spiel gespeichert. Bist du der Spielleiter, tippe auf „Ignorieren“.</p>` : ""}<div class="row"><button class="btn pri" data-pact="takeShare">Übernehmen</button><button class="btn" data-pact="dropShare">Ignorieren</button></div></div>` : "";
   v.innerHTML = offer + ({ptable:pTable, pscript:pScript, pme:pMe, pnotes:pNotes}[ptab])();
   hideTip(); tipify(v);
 }
@@ -3066,7 +3071,9 @@ document.addEventListener("click", e => {
       Q.script = d.s; Q.custom = d.c || [];
       Q.players = d.p.map((n,i) => { const q = old.find(x => x.name === n) || {id:"q" + Math.random().toString(36).slice(2,8), name:n, alive:true, ghost:true, claim:"", guess:"", note:""};
         const dead = (d.x || []).includes(i); if (dead && q.alive) q.ghost = true; q.alive = !dead; return q; });
-      window._share = null; ptab = "ptable"; break; }
+      window._share = null; ptab = "ptable";
+      try{ localStorage.setItem("locked", "1"); }catch(_){}
+      break; }
     case "dropShare": window._share = null; break;
     case "paste": { const v = document.getElementById("qPaste").value.trim(); const i = v.indexOf("#aufbau-"); const d = i >= 0 ? readShare(v.slice(i)) : null; if (!d) return; window._share = d; break; }
     case "resetAsk": document.getElementById("qReset").innerHTML = `<button class="btn bad" data-pact="reset">Ja, wirklich leeren</button>`; return;
@@ -3115,7 +3122,7 @@ document.addEventListener("click", e => {
   const bar = document.getElementById("resetBar");
   if (b.dataset.reset === "ask"){ bar.hidden = false; bar.scrollIntoView({block:"nearest"}); return; }
   if (b.dataset.reset === "no"){ bar.hidden = true; return; }
-  try{ ["grimoire","spieler","mode","grimTab"].forEach(k => localStorage.removeItem(k)); }catch(_){}
+  try{ ["grimoire","spieler","mode","grimTab","locked"].forEach(k => localStorage.removeItem(k)); }catch(_){}
   S = blank(); Q = null; MODE = null; tab = "grim"; ptab = "ptable"; window._share = null;
   if (dbDoc) dbDoc.set({state: JSON.stringify(S), at: new Date().toISOString()}).catch(() => {});
   bar.hidden = true; document.getElementById("dlg").open && document.getElementById("dlg").close();
