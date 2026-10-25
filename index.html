@@ -270,6 +270,9 @@ function vSetup(){
   <div class="tablewrap" style="margin-top:8px"><table><tr><th>Pl.</th><th>Name</th><th>Rolle</th><th>glaubt zu sein</th><th></th></tr>${rows}</table></div>
   ${range}${sugg}${distTxt}
   <p class="small muted">Verteilung jetzt: ${counts.dorf} Dorfbewohner · ${counts.aussen} Außenseiter · ${counts.scherge} Schergen · ${counts.daemon} Dämon</p>
+  <h2>Aufbau mit den Spielern teilen</h2>
+  <p class="small muted">Teilt nur Skript und Namen in Sitzreihenfolge, keine Rollen. Jeder Spieler öffnet den Link und übernimmt den Aufbau in seine eigene Spieler-Ansicht.</p>
+  <div class="row"><button class="btn" data-act="share">Link zum Aufbau erstellen</button></div><div id="shareBox"></div>
   <h2>Bluffs für den Dämon und Roter Hering</h2>
   <div class="row">${[0,1,2].map(i => roleSelect("bluff"+i, S.bluffs[i], r => r.team === "dorf").replace("<select", `<select data-bluff="${i}"`)).join("")}
   <button class="btn sm" data-act="autoBluff">Automatisch wählen</button></div>
@@ -532,6 +535,9 @@ document.addEventListener("click", async e => {
     case "applySetup": applySetup(false); break;
     case "script": S.script = t.dataset.sid; if (S.script === "custom" && !(S.custom||[]).length) S.custom = SCRIPTS[0].roles.slice(); break;
     case "draw": draw(); break;
+    case "share": { const url = shareLink(); const box = document.getElementById("shareBox");
+      box.innerHTML = `<div class="hint"><input type="text" readonly value="${esc(url)}" style="width:100%" id="shareUrl" aria-label="Link zum Aufbau"><div class="row" style="margin-top:6px"><button class="btn sm" data-act="copyShare">Kopieren</button><span class="small muted">Zum Beispiel in die Gruppe schicken.</span></div></div>`; return; }
+    case "copyShare": { const el = document.getElementById("shareUrl"); try{ await navigator.clipboard.writeText(el.value); t.textContent = "Kopiert"; }catch(_){ el.select(); } return; }
     case "shuffle": applySetup(true); break;
     case "autoBluff": { const used = inPlay(); const drunkB = S.players.filter(p => BELIEVER[p.role]).map(p => p.believes); const pool = ROLES.filter(r => r.team === "dorf" && scriptRoleIds().includes(r.id) && !used.has(r.id) && !drunkB.includes(r.id)).sort(() => Math.random() - .5); S.bluffs = pool.slice(0,3).map(r => r.id); break; }
     case "start": if (S.players.some(p => !p.role)) { alertBox("Jeder Spieler braucht eine Rolle."); return; } S.phase = "night"; S.n = 1; log("Erste Nacht beginnt"); tab = "night"; break;
@@ -662,7 +668,7 @@ let Q = null, ptab = "ptable";
 const qblank = () => ({script:"tb", players:[], me:{role:"", log:[]}, notes:""});
 function qGet(){ try{ return JSON.parse(localStorage.getItem("spieler") || "null"); }catch(_){ return null; } }
 function qSave(){ try{ localStorage.setItem("spieler", JSON.stringify(Q)); setSaved("auf diesem Gerät gespeichert"); }catch(_){ setSaved("Speichern nicht möglich"); } }
-const qRoles = () => Q.script === "alle" ? ROLES : ROLES.filter(r => scriptOf(Q.script).roles.includes(r.id));
+const qRoles = () => Q.script === "alle" ? ROLES : Q.script === "custom" ? ROLES.filter(r => (Q.custom || []).includes(r.id)) : ROLES.filter(r => scriptOf(Q.script).roles.includes(r.id));
 function qRoleSelect(id, val, attrs){
   return `<select id="${id}" ${attrs}><option value="">–</option>${["dorf","aussen","scherge","daemon"].map(g => `<optgroup label="${TEAMNAME[g]}">${qRoles().filter(r => r.team === g).map(r => `<option value="${r.id}" ${r.id === val ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</optgroup>`).join("")}</select>`;
 }
@@ -672,9 +678,11 @@ function renderPlayer(){
   document.getElementById("modeBtn").hidden = false;
   document.getElementById("tabs").innerHTML = PTABS.map(([k,l]) => `<button role="tab" aria-selected="${k === ptab}" data-ptab="${k}">${l}</button>`).join("");
   const living = Q.players.filter(p => p.alive).length;
-  document.getElementById("phaseLbl").textContent = `Spieler · ${scriptOf(Q.script === "alle" ? "tb" : Q.script).name}` + (Q.players.length ? ` · ${living} von ${Q.players.length} leben` : "");
+  document.getElementById("phaseLbl").textContent = `Spieler · ${Q.script === "alle" ? "Alle Rollen" : scriptOf(Q.script).name}` + (Q.players.length ? ` · ${living} von ${Q.players.length} leben` : "");
   const v = document.getElementById("view");
-  v.innerHTML = ({ptable:pTable, pscript:pScript, pme:pMe, pnotes:pNotes}[ptab])();
+  const d = window._share, sc = d && (d.s === "custom" ? CUSTOM : scriptOf(d.s));
+  const offer = d ? `<div class="card" id="shareOffer" style="border-color:var(--brass);margin-bottom:10px"><h3>Aufbau vom Spielleiter</h3><p class="small">${esc(sc.name)} · ${d.p.length} Spieler: ${d.p.map(esc).join(", ")}</p><p class="small muted">Deine Notizen zu Spielern mit gleichem Namen bleiben erhalten.</p><div class="row"><button class="btn pri" data-pact="takeShare">Übernehmen</button><button class="btn" data-pact="dropShare">Ignorieren</button></div></div>` : "";
+  v.innerHTML = offer + ({ptable:pTable, pscript:pScript, pme:pMe, pnotes:pNotes}[ptab])();
   hideTip(); tipify(v);
 }
 function pTable(){
@@ -724,6 +732,11 @@ document.addEventListener("click", e => {
     case "del": Q.players = Q.players.filter(x => x !== p); break;
     case "script": Q.script = t.dataset.sid; break;
     case "log": { const v = document.getElementById("qLog").value.trim(); if (!v) return; Q.me.log.push({when: document.getElementById("qWhen").value.trim() || new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}), text:v}); break; }
+    case "takeShare": { const d = window._share; if (!d) return; const old = Q.players;
+      Q.script = d.s; Q.custom = d.c || [];
+      Q.players = d.p.map(n => old.find(x => x.name === n) || {id:"q" + Math.random().toString(36).slice(2,8), name:n, alive:true, ghost:true, claim:"", guess:"", note:""});
+      window._share = null; ptab = "ptable"; break; }
+    case "dropShare": window._share = null; break;
     case "resetAsk": document.getElementById("qReset").innerHTML = `<button class="btn bad" data-pact="reset">Ja, wirklich leeren</button>`; return;
     case "reset": Q = qblank(); break;
     default: return;
@@ -746,11 +759,30 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("keydown", e => { if (MODE === "spieler" && e.key === "Enter" && e.target.id === "qNew"){ e.preventDefault(); document.querySelector('[data-pact="add"]').click(); } });
 
+
+/* ---------- Aufbau teilen: nur Skript und Namen, keine Rollen ---------- */
+function shareLink(){
+  const data = {s: S.script || "tb", c: S.script === "custom" ? (S.custom || []) : undefined, p: S.players.map(p => p.name)};
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  return location.href.split("#")[0] + "#aufbau-" + b64;
+}
+function readShare(){
+  const h = location.hash; if (!h.startsWith("#aufbau-")) return null;
+  try{ const b = h.slice(8).replace(/-/g,"+").replace(/_/g,"/"); return JSON.parse(decodeURIComponent(escape(atob(b)))); }catch(_){ return null; }
+}
+function offerShare(){
+  const d = readShare(); if (!d) return;
+  history.replaceState(null, "", location.href.split("#")[0]);
+  MODE = "spieler"; try{ localStorage.setItem("mode", "spieler"); }catch(_){}
+  if (!Q) Q = qGet() || qblank();
+  window._share = d; ptab = "ptable"; renderPlayer();
+}
 /* ---------- Start ---------- */
 S = lsGet() || null;
 if (!S){ demo(); }
 try{ tab = localStorage.getItem("grimTab") || "grim"; }catch(_){}
 render();
 initStore();
+if (readShare()) offerShare();
 </script>
 <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");</script></body></html>
