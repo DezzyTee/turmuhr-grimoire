@@ -2986,9 +2986,9 @@ window.addEventListener("scroll", hideTip, {passive:true});
 let MODE = null; try{ MODE = localStorage.getItem("mode"); }catch(_){}
 // Ein Gerät, das einen Aufbau per Link übernommen hat, ist ein Spieler-Gerät: keine Spielleiter-Ansicht bis zum Zurücksetzen
 const isLocked = () => { try{ return localStorage.getItem("locked") === "1"; }catch(_){ return false; } };
-if (MODE === "spielleiter" && isLocked()) MODE = "spieler";
+if (isLocked()) MODE = "spieler";
 function setMode(m){
-  if (m === "spielleiter" && isLocked()) m = "spieler"; MODE = m; try{ m ? localStorage.setItem("mode", m) : localStorage.removeItem("mode"); }catch(_){} render(); }
+  if (isLocked()) m = "spieler"; MODE = m; try{ m ? localStorage.setItem("mode", m) : localStorage.removeItem("mode"); }catch(_){} render(); }
 function renderStart(){
   document.getElementById("tabs").innerHTML = ""; document.getElementById("modeBtn").hidden = true;
   document.getElementById("phaseLbl").textContent = "Wer bist du heute?";
@@ -3009,23 +3009,24 @@ function qRoleSelect(id, val, attrs){
 const PTABS = [["ptable","Mitspieler"],["pscript","Skript"],["pme","Ich"],["pnotes","Notizen"]];
 function renderPlayer(){
   if (!Q) Q = qGet() || qblank();
-  document.getElementById("modeBtn").hidden = false;
+  document.getElementById("modeBtn").hidden = isLocked();
   document.getElementById("tabs").innerHTML = PTABS.map(([k,l]) => `<button role="tab" aria-selected="${k === ptab}" data-ptab="${k}">${l}</button>`).join("");
   const living = Q.players.filter(p => p.alive).length;
   document.getElementById("phaseLbl").textContent = `Spieler · ${Q.script === "alle" ? "Alle Rollen" : scriptOf(Q.script).name}` + (Q.players.length ? ` · ${living} von ${Q.players.length} leben` : "");
   const v = document.getElementById("view");
   const d = window._share, sc = d && (d.s === "custom" ? CUSTOM : scriptOf(d.s));
-  const offer = d ? `<div class="card" id="shareOffer" style="border-color:var(--brass);margin-bottom:10px"><h3>Aufbau vom Spielleiter</h3><p class="small">${esc(sc.name)} · ${d.p.length} Spieler: ${d.p.map(esc).join(", ")}</p>${(d.x||[]).length ? `<p class="small">Tot: <b>${d.x.map(i => esc(d.p[i])).join(", ")}</b></p>` : ""}<p class="small muted">Deine Notizen zu Spielern mit gleichem Namen bleiben erhalten. Danach ist die Spielleiter-Ansicht auf diesem Gerät gesperrt.</p>${S.players.length && !isLocked() ? `<p class="hint bad small">Auf diesem Gerät ist ein Spielleiter-Spiel gespeichert. Bist du der Spielleiter, tippe auf „Ignorieren“.</p>` : ""}<div class="row"><button class="btn pri" data-pact="takeShare">Übernehmen</button><button class="btn" data-pact="dropShare">Ignorieren</button></div></div>` : "";
+  const offer = d ? `<div class="card" id="shareOffer" style="border-color:var(--brass);margin-bottom:10px"><h3>Aufbau vom Spielleiter</h3><p class="small">${esc(sc.name)} · ${d.p.length} Spieler: ${d.p.map(esc).join(", ")}</p>${(d.x||[]).length ? `<p class="small">Tot: <b>${d.x.map(i => esc(d.p[i])).join(", ")}</b></p>` : ""}<div class="row" style="margin:6px 0"><label for="qWho"><b>Wer bist du?</b></label><select id="qWho"><option value="">bitte wählen</option>${d.p.map((n,i) => `<option value="${i}" ${Q.players[i] && Q.players[i].id === Q.meId && Q.players[i].name === n ? "selected" : ""}>${i+1} · ${esc(n)}</option>`).join("")}</select></div>
+  <p class="small muted">Deine Notizen zu Spielern mit gleichem Namen bleiben erhalten. Danach ist die Spielleiter-Ansicht auf diesem Gerät gesperrt.</p>${S.players.length && !isLocked() ? `<p class="hint bad small">Auf diesem Gerät ist ein Spielleiter-Spiel gespeichert. Bist du der Spielleiter, tippe auf „Ignorieren“.</p>` : ""}<div class="row"><button class="btn pri" data-pact="takeShare">Übernehmen</button><button class="btn" data-pact="dropShare">Ignorieren</button></div></div>` : "";
   v.innerHTML = offer + ({ptable:pTable, pscript:pScript, pme:pMe, pnotes:pNotes}[ptab])();
   hideTip(); tipify(v);
 }
 function pTable(){
   const living = Q.players.filter(p => p.alive).length;
-  const cards = Q.players.map((p,i) => `<div class="card pcard ${p.alive ? "" : "dead"}">
-    <div class="row" style="justify-content:space-between"><h3>${i+1} · ${esc(p.name)}</h3>
+  const cards = Q.players.map((p,i) => `<div class="card pcard ${p.alive ? "" : "dead"}" ${p.id === Q.meId ? 'style="border-color:var(--brass)"' : ""}>
+    <div class="row" style="justify-content:space-between"><h3>${i+1} · ${esc(p.name)}${p.id === Q.meId ? ' <span class="pill" style="color:var(--brass)">du</span>' : ""}</h3>
       <div class="row"><button class="btn sm" data-pact="alive" data-qid="${p.id}">${p.alive ? "lebt" : "🎭 tot"}</button>${!p.alive ? `<label class="chk"><input type="checkbox" data-qghost="${p.id}" ${p.ghost ? "checked" : ""}> Geisterstimme</label>` : ""}</div></div>
-    <div class="prow small" style="margin-top:6px"><span>behauptet</span>${qRoleSelect("qc_"+p.id, p.claim, `data-qclaim="${p.id}"`)}
-      <span>mein Verdacht</span><span class="guess">${[["g","gut"],["q","?"],["b","böse"]].map(([k,l]) => `<button class="${k}" aria-pressed="${p.guess === k}" data-pact="guess" data-g="${k}" data-qid="${p.id}">${l}</button>`).join("")}</span></div>
+    <div class="prow small" style="margin-top:6px"><span>${p.id === Q.meId ? "meine Rolle" : "Rolle"}</span><span class="row">${qRoleSelect("qc_"+p.id, p.claim, `data-qclaim="${p.id}"`)}${p.claim && p.id !== Q.meId ? sureBtn("claim", p.id, p.claimSure) : ""}</span>
+      <span>mein Verdacht</span><span class="row"><span class="guess">${[["g","gut"],["q","?"],["b","böse"]].map(([k,l]) => `<button class="${k}" aria-pressed="${p.guess === k}" data-pact="guess" data-g="${k}" data-qid="${p.id}">${l}</button>`).join("")}</span>${p.guess && p.guess !== "q" ? sureBtn("guess", p.id, p.guessSure) : ""}</span></div>
     ${p.claim && R[p.claim] ? `<div class="small muted notip" style="margin-top:4px">${esc(R[p.claim].ability)}</div>` : ""}
     <input type="text" data-qnote="${p.id}" value="${esc(p.note || "")}" placeholder="Notiz zu ${esc(p.name)}" style="width:100%;margin-top:6px" aria-label="Notiz ${esc(p.name)}">
     <div class="row" style="margin-top:6px;justify-content:flex-end"><button class="btn sm" data-pact="up" data-qid="${p.id}" aria-label="nach oben">↑</button><button class="btn sm bad" data-pact="del" data-qid="${p.id}" aria-label="entfernen">×</button></div></div>`).join("");
@@ -3041,10 +3042,14 @@ function pScript(){
   const list = ["dorf","aussen","scherge","daemon"].map(g => `<h2>${TEAMNAME[g]}</h2><div class="rlist">${qRoles().filter(r => r.team === g).map(r => `<div class="rl notip"><span class="disc ${["scherge","daemon"].includes(g) ? "evil" : ""}">${icon(r.id)}</span><div><b>${esc(r.name)}</b> <span class="small muted">${esc(r.timing)}</span><div class="small">${esc(r.ability)}</div></div></div>`).join("")}</div>`).join("");
   return `<h2>Welches Skript spielt ihr?</h2><div class="grid">${cards}</div>${list}<p class="small muted">* nicht in der ersten Nacht. Nicht jede Rolle ist im Spiel.</p>`;
 }
+const meP = () => Q.players.find(x => x.id === Q.meId);
+const myRole = () => (meP() ? meP().claim : Q.me.role) || "";
+function sureBtn(kind, id, on){ return `<button class="btn sm" data-pact="sure" data-kind="${kind}" data-qid="${id}" aria-pressed="${!!on}" title="sicher oder unsicher">${on ? "✓ sicher" : "? unsicher"}</button>`; }
 function pMe(){
-  const r = R[Q.me.role];
-  const lg = [...Q.me.log].reverse().map((e,i) => `<div class="entry"><b>${esc(e.when)}</b> · ${esc(e.text)}</div>`).join("");
-  return `<h2>Meine Rolle</h2><div class="card"><div class="row">${qRoleSelect("qMe", Q.me.role, 'data-qme="1"')}</div>
+  const r = R[myRole()], me = meP(), seat = me ? Q.players.indexOf(me) + 1 : 0;
+  const lg = Q.me.log.map((e,i) => `<div class="entry row" style="justify-content:space-between"><span><b>${esc(e.when)}</b> · ${e.sure ? "" : "<i>"}${esc(e.text)}${e.sure ? "" : "</i>"}</span>${sureBtn("log", i, e.sure)}</div>`).reverse().join("");
+  return `<h2>Ich</h2><div class="card"><div class="row"><span>Ich bin</span><select data-qwho="1" aria-label="Wer bin ich"><option value="">–</option>${Q.players.map((p,i) => `<option value="${p.id}" ${p.id === Q.meId ? "selected" : ""}>${i+1} · ${esc(p.name)}</option>`).join("")}</select>${seat ? `<span class="pill">Platz ${seat}</span>` : ""}</div>
+  <div class="row" style="margin-top:8px"><span>Meine Rolle</span>${qRoleSelect("qMe", myRole(), 'data-qme="1"')}</div>
     ${r ? `<div class="rl notip" style="margin-top:10px"><span class="disc ${["scherge","daemon"].includes(r.team) ? "evil" : ""}">${icon(r.id)}</span><div><b>${esc(r.name)}</b> <span class="pill t-${r.team}">${TEAMNAME[r.team]}</span><div class="small">${esc(r.ability)}</div></div></div>` : `<p class="small muted">Nur für dich. Wähle die Rolle, die dir der Spielleiter gezeigt hat.</p>`}</div>
   <h2>Meine Infos</h2><div class="row"><input type="text" id="qWhen" placeholder="z. B. Nacht 1" style="width:120px" aria-label="Wann"><input type="text" id="qLog" placeholder="Was hast du erfahren?" style="flex:1;min-width:180px" aria-label="Info"><button class="btn" data-pact="log">Eintragen</button></div>${lg || `<p class="muted small">Noch nichts notiert.</p>`}`;
 }
@@ -3063,15 +3068,18 @@ document.addEventListener("click", e => {
     case "add": { const v = document.getElementById("qNew").value.trim(); if (!v) return; Q.players.push({id:"q" + Math.random().toString(36).slice(2,8), name:v, alive:true, ghost:true, claim:"", guess:"", note:""}); break; }
     case "alive": p.alive = !p.alive; p.ghost = true; break;
     case "guess": p.guess = p.guess === t.dataset.g ? "" : t.dataset.g; break;
+    case "sure": { if (t.dataset.kind === "log"){ const e = Q.me.log[+t.dataset.qid]; e.sure = !e.sure; } else { const k = t.dataset.kind + "Sure"; p[k] = !p[k]; if (p.id === Q.meId && k === "claimSure") p.claimSure = true; } break; }
     case "up": { const i = Q.players.indexOf(p); if (i > 0) [Q.players[i-1], Q.players[i]] = [Q.players[i], Q.players[i-1]]; break; }
     case "del": Q.players = Q.players.filter(x => x !== p); break;
     case "script": Q.script = t.dataset.sid; break;
-    case "log": { const v = document.getElementById("qLog").value.trim(); if (!v) return; Q.me.log.push({when: document.getElementById("qWhen").value.trim() || new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}), text:v}); break; }
-    case "takeShare": { const d = window._share; if (!d) return; const old = Q.players;
+    case "log": { const v = document.getElementById("qLog").value.trim(); if (!v) return; Q.me.log.push({when: document.getElementById("qWhen").value.trim() || new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}), text:v, sure:true}); break; }
+    case "takeShare": { const d = window._share; if (!d) return; const old = Q.players; const who = document.getElementById("qWho")?.value;
+      if (who === "" || who === undefined){ document.getElementById("qWho")?.focus(); return; }
       Q.script = d.s; Q.custom = d.c || [];
       Q.players = d.p.map((n,i) => { const q = old.find(x => x.name === n) || {id:"q" + Math.random().toString(36).slice(2,8), name:n, alive:true, ghost:true, claim:"", guess:"", note:""};
         const dead = (d.x || []).includes(i); if (dead && q.alive) q.ghost = true; q.alive = !dead; return q; });
-      window._share = null; ptab = "ptable";
+      Q.meId = Q.players[+who].id; if (Q.me.role && !Q.players[+who].claim){ Q.players[+who].claim = Q.me.role; Q.players[+who].claimSure = true; }
+      window._share = null; ptab = "pme";
       try{ localStorage.setItem("locked", "1"); }catch(_){}
       break; }
     case "dropShare": window._share = null; break;
@@ -3086,9 +3094,10 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   if (MODE !== "spieler") return;
   const d = e.target.dataset;
-  if (d.qclaim){ Q.players.find(x => x.id === d.qclaim).claim = e.target.value; qSave(); return renderPlayer(); }
+  if (d.qclaim){ const p = Q.players.find(x => x.id === d.qclaim); p.claim = e.target.value; if (p.id === Q.meId){ Q.me.role = p.claim; p.claimSure = true; } qSave(); return renderPlayer(); }
+  if (d.qwho){ Q.meId = e.target.value || null; const p = meP(); if (p && !p.claim && Q.me.role){ p.claim = Q.me.role; p.claimSure = true; } qSave(); return renderPlayer(); }
   if (d.qghost){ Q.players.find(x => x.id === d.qghost).ghost = e.target.checked; return qSave(); }
-  if (d.qme){ Q.me.role = e.target.value; qSave(); return renderPlayer(); }
+  if (d.qme){ Q.me.role = e.target.value; const p = meP(); if (p){ p.claim = Q.me.role; p.claimSure = true; } qSave(); return renderPlayer(); }
 });
 document.addEventListener("input", e => {
   if (MODE !== "spieler") return;
@@ -3114,6 +3123,8 @@ function offerShare(){
   history.replaceState(null, "", location.href.split("#")[0]);
   MODE = "spieler"; try{ localStorage.setItem("mode", "spieler"); }catch(_){}
   if (!Q) Q = qGet() || qblank();
+  // Wer per Link beitritt, ist Spieler. Nur ein Gerät mit eigenem Spielleiter-Spiel darf ablehnen.
+  if (!S.players.length) { try{ localStorage.setItem("locked", "1"); }catch(_){} }
   window._share = d; ptab = "ptable"; renderPlayer();
 }
 
