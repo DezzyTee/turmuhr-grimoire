@@ -2543,7 +2543,69 @@ function storyCard(){
     <h3 style="margin-top:8px">Sätze für den Abend</h3><table>${STORY.lines.map(([k,v]) => `<tr><td class="small muted" style="white-space:nowrap">${k}</td><td>${esc(v)}</td></tr>`).join("")}</table></details>`;
 }
 /* ---------- Ansichten ---------- */
-const TABS = [["grim","Grimoire"],["setup","Aufbau"],["talk","Gespräche"],["vote","Abstimmung"],["night","Nacht"],["notes","Notizen & Protokoll"]];
+const WIKI = {
+  basis: [
+    ["Worum geht es?", ["Im Dorf hat sich ein Dämon versteckt. Das gute Team (Dorfbewohner und Außenseiter) will ihn finden und hinrichten. Das böse Team (Dämon und Schergen) will überleben, bis nur noch 2 Spieler leben.",
+      "Jeder hat eine geheime Rolle mit einer Fähigkeit. Die Guten wissen nicht, wer wer ist. Die Bösen kennen sich gegenseitig."]],
+    ["Wer gewinnt?", ["<b>Gut</b> gewinnt, sobald der Dämon stirbt.",
+      "<b>Böse</b> gewinnt, wenn nur noch 2 Spieler leben (einer davon der Dämon).",
+      "Manche Rollen ändern das, zum Beispiel der Heilige oder der Bürgermeister."]],
+    ["Ablauf einer Runde", ["<b>Nacht:</b> Alle schließen die Augen. Der Spielleiter weckt Rollen einzeln, sie bekommen Infos oder wählen jemanden. Bei uns ist die Nacht die Pause für Toilette und Getränke, die Gespräche laufen einzeln im Nebenraum.",
+      "<b>Tag:</b> Alle diskutieren. In der <b>Sprechstunde</b> geht jeder etwa 1 Minute allein zum Spielleiter. Danach wird nominiert und abgestimmt.",
+      "Die erste Nacht ist besonders: Die Bösen lernen sich kennen, viele Gute bekommen ihre erste Info."]],
+    ["Nominieren und abstimmen", ["Jeder lebende Spieler darf pro Tag <b>einmal nominieren</b> und jeder darf <b>einmal nominiert</b> werden.",
+      "Zur Abstimmung hebt man die Hand. Nötig sind mindestens <b>die Hälfte der Lebenden</b>. Wer am Ende die meisten Stimmen hat, wird hingerichtet. Bei Gleichstand stirbt niemand.",
+      "Pro Tag gibt es höchstens eine Hinrichtung. Man darf den Tag auch ohne Hinrichtung beenden."]],
+    ["Tot sein", ["Tote spielen weiter: Sie reden mit, flüstern, raten mit und gewinnen mit ihrem Team.",
+      "Tote tragen eine <b>venezianische Maske</b>. Sie dürfen nicht mehr nominieren und haben nur noch <b>eine einzige Geisterstimme</b> für den Rest des Spiels."]],
+    ["Hausregeln für heute", ["Du darfst deine Rolle behaupten, auch lügen. Deine Karte zeigst du aber <b>nie</b> her.",
+      "Der Imp nennt nachts ein Ziel und ein <b>Ersatzopfer</b>, falls das Ziel schon tot ist.",
+      "Der Spielleiter ist der Geist des letzten Schamanen. Er ist neutral und hilft beiden Seiten nur mit Regeln."]],
+    ["Wichtige Begriffe", ["<b>Vergiftet / betrunken:</b> Die Fähigkeit wirkt nicht, Infos können falsch sein. Man erfährt es nicht.",
+      "<b>Trunkenbold:</b> Glaubt, ein Dorfbewohner zu sein, und weiß nicht, dass seine Infos falsch sind.",
+      "<b>Bluff:</b> Rollen, die nicht im Spiel sind. Der Dämon kennt drei davon und kann sie behaupten.",
+      "<b>Jede Nacht*:</b> Das Sternchen heißt: nicht in der ersten Nacht."]]
+  ],
+  spieler: [
+    ["Wenn du gut bist", ["Teile Infos, aber nicht alles sofort: Der Dämon hört mit. Eine gute Taktik ist, erst einem vertrauten Spieler zu erzählen, was du weißt.",
+      "Vergleiche Infos: Passen die Aussagen von drei Leuten zusammen, stimmen sie wahrscheinlich.",
+      "Hinrichten ist nicht schlimm. Lieber einen Verdächtigen zu viel als zu wenig, sonst gewinnt der Dämon über die Nächte.",
+      "Rechne damit, dass deine Info falsch sein kann (Gift, Trunkenbold)."]],
+    ["Wenn du böse bist", ["Du kennst dein Team. Der Dämon kennt außerdem drei Bluffs: Rollen, die sicher nicht im Spiel sind.",
+      "Behaupte eine gute Rolle und erfinde passende Infos. Bleib bei deiner Geschichte.",
+      "Lenke Verdacht auf Gute, aber nicht zu laut. Stimm auch mal gegen eigene Leute, das wirkt unschuldig."]],
+    ["So hilft dir die App", ["<b>Mitspieler:</b> Trag für jeden ein, welche Rolle er behauptet und ob du ihn für gut oder böse hältst. Mit dem Knopf <b>sicher / unsicher</b> markierst du, wie sehr du dir sicher bist.",
+      "<b>Ich:</b> Deine Rolle und alles, was du nachts erfährst. Trag die Info sofort nach der Sprechstunde ein.",
+      "<b>Skript:</b> Alle Rollen dieses Spiels. Tippe auf eine Rolle, um zu sehen, was sie kann.",
+      "Deine Notizen bleiben nur auf deinem Handy. Niemand sonst sieht sie."]],
+    ["Erste Schritte am Abend", ["Scanne den QR-Code des Spielleiters und wähle bei „Wer bist du?“ deinen Namen.",
+      "Lies deine Rollenkarte, merke sie dir und klappe sie zu.",
+      "Trag deine Rolle unter <b>Ich</b> ein. Mehr musst du am Anfang nicht tun."]]
+  ],
+  leitung: [
+    ["Vor dem Spiel", ["Unter <b>Aufbau</b> die Spieler in Sitzreihenfolge eintragen und das Skript wählen. Die App schlägt eine Verteilung vor.",
+      "Beim Trunkenbold eine Dorfbewohner-Rolle wählen, die er glaubt. Beim Wahrsager einen Roten Hering festlegen.",
+      "Drei Bluffs für den Imp wählen (Rollen, die nicht im Spiel sind).",
+      "Den QR-Code unter <b>Aufbau</b> zeigen. Er enthält nur Namen, Sitzplätze und Tote, nie Rollen."]],
+    ["Erste Nacht", ["Alle Augen zu. Dämon und Schergen kurz die Augen öffnen lassen, damit sie sich sehen. Der Imp bekommt die Bluffs.",
+      "Dann jeden einzeln in den Nebenraum holen und die Info aus dem Tab <b>Gespräche</b> geben.",
+      "Trunkenbold und Vergiftete bekommen falsche Infos. Du entscheidest, welche: Sie sollen plausibel, aber verwirrend sein."]],
+    ["Der Tag", ["Morgens sagen, wer in der Nacht gestorben ist. Toter: Maske aufsetzen.",
+      "Sprechstunde: Jeder kommt etwa 1 Minute allein. Wer nachts etwas wählt, sagt es hier. Info-Rollen bekommen ihre Info.",
+      "Danach Nominierungen im Tab <b>Abstimmung</b> mitzählen. Die App rechnet die nötige Mehrheit aus."]],
+    ["Die Nacht", ["Im Tab <b>Nacht</b> stehen die Wahlen aus der Sprechstunde. Die App löst Mönch, Imp und Ersatzopfer auf.",
+      "Alles, was du nicht sicher weißt, im Zweifel so entscheiden, dass das Spiel spannend bleibt."]],
+    ["Gute Leitung", ["Du bist neutral, aber du darfst das Spiel ausbalancieren: Läuft es für eine Seite zu leicht, gib der anderen über Gift, Trunkenbold oder Einsiedler etwas mehr Chancen.",
+      "Erkläre Regeln jederzeit offen. Verrate aber nie, wer welche Rolle hat.",
+      "Halte das Tempo hoch: Diskussion etwa 10 Minuten pro Tag, später kürzer.",
+      "Nach dem Spiel das Grimoire zeigen und die Geschichte erzählen. Das ist für Anfänger der beste Teil."]]
+  ]
+};
+function vWiki(teile){
+  const t = { basis: "Grundregeln", spieler: "Tipps für Spieler", leitung: "Für die Spielleitung" };
+  return `<div class="card"><h2>Anleitung</h2><p class="small muted">Tippe auf ein Thema, um es zu öffnen.</p></div>` + teile.map(k => `<div class="card" style="margin-top:10px"><h3>${t[k]}</h3>${WIKI[k].map(([h, ps], i) => `<details ${k === "basis" && !i ? "open" : ""} style="margin:6px 0"><summary><b>${h}</b></summary>${ps.map(p => `<p style="margin:6px 0">${p}</p>`).join("")}</details>`).join("")}</div>`).join("");
+}
+const TABS = [["grim","Grimoire"],["setup","Aufbau"],["talk","Gespräche"],["vote","Abstimmung"],["night","Nacht"],["notes","Notizen & Protokoll"],["wiki","Anleitung"]];
 function renderTabs(){
   document.getElementById("tabs").innerHTML = TABS.map(([k,l]) => `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${l}</button>`).join("");
 }
@@ -2553,7 +2615,7 @@ function render(){
   renderTabs();
   document.getElementById("phaseLbl").textContent = phaseText() + (S.players.length ? ` · ${alive().length} von ${S.players.length} leben` : "");
   const v = document.getElementById("view");
-  v.innerHTML = ({grim:vGrim, setup:vSetup, talk:vTalk, vote:vVote, night:vNight, notes:vNotes}[tab])();
+  v.innerHTML = ({grim:vGrim, setup:vSetup, talk:vTalk, vote:vVote, night:vNight, notes:vNotes, wiki:() => vWiki(["leitung","basis"])}[tab])();
   hideTip(); tipify(v);
 }
 
@@ -3006,7 +3068,7 @@ const qRoles = () => Q.script === "alle" ? ROLES : Q.script === "custom" ? ROLES
 function qRoleSelect(id, val, attrs){
   return `<select id="${id}" ${attrs}><option value="">–</option>${["dorf","aussen","scherge","daemon"].map(g => `<optgroup label="${TEAMNAME[g]}">${qRoles().filter(r => r.team === g).map(r => `<option value="${r.id}" ${r.id === val ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</optgroup>`).join("")}</select>`;
 }
-const PTABS = [["ptable","Mitspieler"],["pscript","Skript"],["pme","Ich"],["pnotes","Notizen"]];
+const PTABS = [["ptable","Mitspieler"],["pscript","Skript"],["pme","Ich"],["pnotes","Notizen"],["pwiki","Anleitung"]];
 function renderPlayer(){
   if (!Q) Q = qGet() || qblank();
   document.getElementById("modeBtn").hidden = isLocked();
@@ -3017,7 +3079,7 @@ function renderPlayer(){
   const d = window._share, sc = d && (d.s === "custom" ? CUSTOM : scriptOf(d.s));
   const offer = d ? `<div class="card" id="shareOffer" style="border-color:var(--brass);margin-bottom:10px"><h3>Aufbau vom Spielleiter</h3><p class="small">${esc(sc.name)} · ${d.p.length} Spieler: ${d.p.map(esc).join(", ")}</p>${(d.x||[]).length ? `<p class="small">Tot: <b>${d.x.map(i => esc(d.p[i])).join(", ")}</b></p>` : ""}<div class="row" style="margin:6px 0"><label for="qWho"><b>Wer bist du?</b></label><select id="qWho"><option value="">bitte wählen</option>${d.p.map((n,i) => `<option value="${i}" ${Q.players[i] && Q.players[i].id === Q.meId && Q.players[i].name === n ? "selected" : ""}>${i+1} · ${esc(n)}</option>`).join("")}</select></div>
   <p class="small muted">Deine Notizen zu Spielern mit gleichem Namen bleiben erhalten. Danach ist die Spielleiter-Ansicht auf diesem Gerät gesperrt.</p>${S.players.length && !isLocked() ? `<p class="hint bad small">Auf diesem Gerät ist ein Spielleiter-Spiel gespeichert. Bist du der Spielleiter, tippe auf „Ignorieren“.</p>` : ""}<div class="row"><button class="btn pri" data-pact="takeShare">Übernehmen</button><button class="btn" data-pact="dropShare">Ignorieren</button></div></div>` : "";
-  v.innerHTML = offer + ({ptable:pTable, pscript:pScript, pme:pMe, pnotes:pNotes}[ptab])();
+  v.innerHTML = offer + ({ptable:pTable, pscript:pScript, pme:pMe, pnotes:pNotes, pwiki:() => vWiki(["basis","spieler"])}[ptab])();
   hideTip(); tipify(v);
 }
 function pTable(){
