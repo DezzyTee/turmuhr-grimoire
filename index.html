@@ -3314,7 +3314,7 @@ function scene(id, started){
   return () => { go = true; ramp(g, false, XF); setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); MUSICG.splice(MUSICG.indexOf(g), 1); }, XF * 1000 + 300); };
 }
 const FXEL = {}, LOOPS = {}, MUSICG = [];
-const FXVOL = {enthauptung:.85, glocke:.7, mitternacht:.7, donner:.6, wolf:.4, rabe:.32, eule:.32, herz:.5, geist:.65, fluestern:.5, tuer:.45, lachen:.42};
+const FXVOL = {enthauptung:.85, glocke:1, mitternacht:1, donner:.6, wolf:.4, rabe:.32, eule:.32, herz:.5, geist:.65, fluestern:.5, tuer:.45, lachen:.42};
 const fxBusy = () => Object.values(FXEL).filter(f => !f.a.paused && !f.a.ended).length;
 function fx(id){
   const c = aud(); let f = FXEL[id];
@@ -3335,6 +3335,7 @@ function play(m){
     else { SND.scene = m.v; SND.stopScene = scene(m.v, () => { if (old) old(); }); } }
   else if (m.k === "stop"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; SND.scene = ""; }
   else if (m.k === "fx" && SFX.some(x => x[0] === m.v)) fx(m.v);
+  else if (m.k === "autooff") Object.keys(LOOPS).forEach(k => { clearTimeout(LOOPS[k]); delete LOOPS[k]; });
   else if (m.k === "auto" && SFX.some(x => x[0] === m.v)) autoFx(m.v);
   else if (m.k === "mvol"){ SND.mvol = Math.max(0, Math.min(1, +m.v)); if (SND.stopScene && MUSICG.length){ const g = MUSICG[MUSICG.length - 1]; g.gain.cancelScheduledValues(SND.ctx.currentTime); g.gain.setTargetAtTime(SND.mvol, SND.ctx.currentTime, 0.05); } return; }
   else if (m.k === "vol"){ SND.vol = Math.max(0, Math.min(1, +m.v)); SND.master.gain.setTargetAtTime(SND.vol, SND.ctx.currentTime, 0.05); return; }
@@ -3395,14 +3396,14 @@ function vSound(){
   return `<div class="card notip"><h2>Soundboard</h2>${head}</div>
   <div class="card notip" style="margin-top:10px"><h3>Musik</h3><div class="row">${SCENES.map(([k,l,i]) => b("scene", k, l, i, SND.scene === k)).join("")}</div>
   <div class="row" style="margin-top:8px;align-items:center"><button class="btn" data-snd="stop" ${ok ? "" : "disabled"}>⏹ Musik aus</button><label class="small" style="flex:1;display:flex;gap:8px;align-items:center">Gesamt <input type="range" id="sndVol" min="0" max="100" value="${Math.round(SND.vol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label><label class="small" style="flex:1;display:flex;gap:8px;align-items:center;min-width:200px">Musik <input type="range" id="sndMVol" min="0" max="100" value="${Math.round(SND.mvol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label></div></div>
-  <div class="card notip" style="margin-top:10px"><h3>Effekte</h3><div class="row">${SFX.map(([k,l,i]) => { const on = SND.role === "fern" ? (SND.loops || []).includes(k) : !!LOOPS[k]; return `<div style="display:flex;flex:1 1 170px;gap:4px">${b("fx", k, l, i)}<button class="btn ${on ? "pri" : ""}" data-snd="auto" data-v="${k}" title="Zufällig wiederholen" aria-pressed="${on}" style="min-height:52px" ${ok ? "" : "disabled"}>🔁</button></div>`; }).join("")}</div></div>
+  <div class="card notip" style="margin-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Effekte</h3><button class="btn" data-snd="autooff" ${ok ? "" : "disabled"}>🔁 Alle aus</button></div><div class="row">${SFX.map(([k,l,i]) => { const on = SND.role === "fern" ? (SND.loops || []).includes(k) : !!LOOPS[k]; return `<div style="display:flex;flex:1 1 170px;gap:4px">${b("fx", k, l, i)}<button class="btn ${on ? "pri" : ""}" data-snd="auto" data-v="${k}" title="Zufällig wiederholen" aria-pressed="${on}" style="min-height:52px" ${ok ? "" : "disabled"}>🔁</button></div>`; }).join("")}</div></div>
   <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. 🔁 neben einem Effekt spielt ihn ab und wiederholt ihn dann zufällig alle 35 bis 90 Sekunden, bis du ihn wieder ausschaltest. Es laufen dabei nie mehr als 2 Effekte gleichzeitig. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin) und Wikimedia Commons.</p>`;
 }
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-snd]"); if (!t || MODE !== "spielleiter") return;
   const k = t.dataset.snd, v = t.dataset.v;
   if (k === "scene" || k === "fx" || k === "auto") sndDo({k, v});
-  else if (k === "stop") sndDo({k:"stop"});
+  else if (k === "stop" || k === "autooff") sndDo({k});
   else if (k === "pc") sndPC();
   else if (k === "newcode"){ try{ localStorage.removeItem("sndCode"); }catch(_){} sndPC(); }
   else if (k === "remote") sndRemote((document.getElementById("sndCode") || {}).value);
