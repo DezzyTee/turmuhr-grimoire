@@ -2454,7 +2454,9 @@ const blank = () => ({v:1, script:"tb", onlyScript:true, custom:[], n:0, phase:"
 let dbDoc = null, saveTimer = null;
 function lsGet(){ try{ return JSON.parse(localStorage.getItem("grimoire") || "null"); }catch(e){ return null; } }
 function lsSet(v){ try{ localStorage.setItem("grimoire", JSON.stringify(v)); return true; }catch(e){ return false; } }
+let DEMO = false; try{ DEMO = !!localStorage.getItem("grimoireDemo"); }catch(_){}
 function save(){
+  if (DEMO){ try{ localStorage.setItem("grimoireDemo", JSON.stringify(S)); }catch(_){} setSaved("Testaufbau, wird nicht als Spiel gespeichert"); return; }
   lsSet(S);
   clearTimeout(saveTimer);
   setSaved(dbDoc ? "speichert …" : "auf diesem Gerät gespeichert");
@@ -2473,7 +2475,7 @@ async function initStore(){
     if (db && uid){
       dbDoc = db.doc("data/users/" + uid + "/grimoire");
       const snap = await dbDoc.get();
-      if (snap.exists){ const st = JSON.parse(snap.data().state); if (st && (!S || S.players.length === 0 || confirmSwap(st))) { S = st; render(); } }
+      if (snap.exists && !DEMO){ const st = JSON.parse(snap.data().state); if (st && (!S || S.players.length === 0 || confirmSwap(st))) { S = st; render(); } }
       setSaved("mit deinem Konto verbunden");
     }
   }catch(e){ /* bleibt beim Browser-Speicher */ }
@@ -2601,6 +2603,62 @@ const WIKI = {
       "Nach dem Spiel das Grimoire zeigen und die Geschichte erzählen. Das ist für Anfänger der beste Teil."]]
   ]
 };
+const ERKL = [
+  ["Vor den Gästen", [
+    ["Anleitung", "Testaufbau starten (Knopf unten): Blutmond, 8 Fantasie-Spieler, Tag 2. Echtes Spiel bleibt unberührt."],
+    ["Aufbau", "Echtes Spiel vorher fertig? Dann erst Testaufbau, sonst egal."]]],
+  ["1. Geschichte", [
+    ["Aufbau", "Karte „Der letzte Schamane“: Intro vorlesen. Ich bin der Geist des Schamanen, erstes Opfer des Dämons."],
+    ["", "Ich bin neutral, beantworte Regelfragen jederzeit."]]],
+  ["2. Ziel und Teams", [
+    ["Grimoire", "Sitzkreis zeigen: Dorfbewohner + Außenseiter = gut, Schergen + Dämon = böse."],
+    ["Grimoire", "Beispiel Blutmond: Ben ist Zombuul (Dämon), Dana Advokat des Teufels (Scherge)."],
+    ["", "Böse kennen sich. Gute kennen niemanden."],
+    ["", "Sieg: Dämon tot → Gut. Nur noch 2 leben → Böse."]]],
+  ["3. Rollen und Karten", [
+    ["Grimoire", "Auf eine Rolle tippen: Fähigkeit erklären, z. B. Großmutter, Seemann, Teedame."],
+    ["", "Rollenkarte lesen, zuklappen, NIE zeigen."],
+    ["", "Rolle behaupten erlaubt, lügen erlaubt."],
+    ["Grimoire", "Bluffs: Dämon kennt 3 Rollen, die nicht im Spiel sind (hier Exorzist, Narr, Pazifist)."],
+    ["", "Betrunken / vergiftet: Fähigkeit wirkt nicht, Infos falsch, man merkt es nicht."]]],
+  ["4. Erste Nacht", [
+    ["Nacht", "Augen zu, Musik. Böse öffnen kurz die Augen und sehen sich."],
+    ["Gespräche", "Danach einzeln in den Nebenraum: Rolle bestätigen, erste Info."]]],
+  ["5. Der Tag", [
+    ["", "Morgens sage ich, wer gestorben ist."],
+    ["", "Freie Diskussion, flüstern erlaubt, in Gruppen gehen erlaubt."],
+    ["Gespräche", "Sprechstunde: jeder ca. 1 Minute allein bei mir. Wahlen für die Nacht hier sagen, Infos hier bekommen."]]],
+  ["6. Nominieren und Abstimmen", [
+    ["Abstimmung", "Jeder Lebende nominiert max. 1× pro Tag, jeder wird max. 1× nominiert."],
+    ["Abstimmung", "Hand heben. Nötig: mindestens Hälfte der Lebenden. Meiste Stimmen stirbt, Gleichstand: niemand."],
+    ["", "Max. 1 Hinrichtung pro Tag, auch keine ist erlaubt."]]],
+  ["7. Die Nacht", [
+    ["", "Nacht = Pause: Toilette, Getränke. Gespräche laufen vorher in der Sprechstunde."],
+    ["Nacht", "Ersatzopfer: Dämon nennt Ziel UND Ersatz, falls das Ziel schon tot ist."],
+    ["Grimoire", "Gastwirt-Schutz zeigen (Marker „Geschützt“ bei Gül)."]]],
+  ["8. Tot sein", [
+    ["Grimoire", "Cem ist tot: spielt weiter, redet mit, gewinnt mit seinem Team."],
+    ["", "Toter trägt die venezianische Maske."],
+    ["", "Kein Nominieren mehr. Nur noch EINE Geisterstimme bis Spielende."]]],
+  ["9. Die App für Spieler", [
+    ["Aufbau", "QR-Code zeigen. Alle scannen, bei „Wer bist du?“ den Namen wählen (hier Testnamen)."],
+    ["Spieler: Ich", "Eigene Rolle und alle Infos eintragen, nach jeder Sprechstunde."],
+    ["Spieler: Mitspieler", "Behauptete Rolle, gut / böse, Knopf sicher / unsicher."],
+    ["Spieler: Skript", "Auf Rollen tippen = Fähigkeit. Anleitung-Tab = Regeln."],
+    ["", "Alles bleibt auf dem eigenen Handy. Der QR-Code enthält nie Rollen."]]],
+  ["10. Fragen und Start", [
+    ["", "Fragen? Lieber jetzt als im Spiel."],
+    ["Oben", "Demo beenden. Echtes Spiel (Dunkle Machenschaften) ist wieder da."],
+    ["Aufbau", "Echten QR zeigen, alle scannen neu und wählen ihren Namen."],
+    ["", "Rollenkarten verteilen, Sitz-Aufsteller, erste Nacht beginnt."]]]
+];
+function vErkl(){
+  let done = []; try{ done = JSON.parse(localStorage.getItem("erkl") || "[]"); }catch(_){}
+  let k = 0;
+  const groups = ERKL.map(([h, items]) => `<h3 style="margin:12px 0 4px">${h}</h3>` + items.map(([scr, t]) => { const id = k++; return `<label class="notip" style="display:flex;gap:8px;align-items:flex-start;margin:4px 0"><input type="checkbox" data-erkl="${id}" ${done.includes(id) ? "checked" : ""} style="margin-top:4px" onchange="erklTick(this)"><span>${scr ? `<span class="tag">${scr}</span> ` : ""}${t}</span></label>`; }).join("")).join("");
+  return `<div class="card"><h2>Checkliste Erklärrunde</h2><p class="small muted">Stichpunkte in Reihenfolge. Das Schild sagt, welchen Bildschirm du dabei zeigst.</p><div class="row">${DEMO ? `<button class="btn bad" data-act="demoEnd">Demo beenden</button>` : `<button class="btn pri" data-act="demoStart">Testaufbau starten</button>`}<button class="btn" onclick="try{localStorage.removeItem('erkl')}catch(_){};render()">Häkchen löschen</button></div>${groups}</div>`;
+}
+function erklTick(el){ let d = []; try{ d = JSON.parse(localStorage.getItem("erkl") || "[]"); }catch(_){} const id = +el.dataset.erkl; d = d.filter(x => x !== id); if (el.checked) d.push(id); try{ localStorage.setItem("erkl", JSON.stringify(d)); }catch(_){} }
 function vWiki(teile){
   const t = { basis: "Grundregeln", spieler: "Tipps für Spieler", leitung: "Für die Spielleitung" };
   return `<div class="card"><h2>Anleitung</h2><p class="small muted">Tippe auf ein Thema, um es zu öffnen.</p></div>` + teile.map(k => `<div class="card" style="margin-top:10px"><h3>${t[k]}</h3>${WIKI[k].map(([h, ps], i) => `<details ${k === "basis" && !i ? "open" : ""} style="margin:6px 0"><summary><b>${h}</b></summary>${ps.map(p => `<p style="margin:6px 0">${p}</p>`).join("")}</details>`).join("")}</div>`).join("");
@@ -2614,8 +2672,9 @@ function render(){
   document.getElementById("modeBtn").hidden = false;
   renderTabs();
   document.getElementById("phaseLbl").textContent = phaseText() + (S.players.length ? ` · ${alive().length} von ${S.players.length} leben` : "");
+  if (DEMO) document.getElementById("phaseLbl").textContent = "TESTAUFBAU · " + document.getElementById("phaseLbl").textContent;
   const v = document.getElementById("view");
-  v.innerHTML = ({grim:vGrim, setup:vSetup, talk:vTalk, vote:vVote, night:vNight, notes:vNotes, wiki:() => vWiki(["leitung","basis"])}[tab])();
+  v.innerHTML = (DEMO ? `<div class="card" style="border-color:var(--evil);margin-bottom:10px"><div class="row" style="justify-content:space-between;align-items:center"><b>Testaufbau (Blutmond), nur zum Erklären</b><button class="btn bad" data-act="demoEnd">Demo beenden</button></div></div>` : "") + ({grim:vGrim, setup:vSetup, talk:vTalk, vote:vVote, night:vNight, notes:vNotes, wiki:() => vErkl() + vWiki(["leitung","basis"])}[tab])();
   hideTip(); tipify(v);
 }
 
@@ -2886,6 +2945,19 @@ function demo(){
   setTag(S.players[4],"hering",true);
   S.notes = "Beispielspiel. Unter Notizen & Protokoll → Neues Spiel startest du frisch.";
 }
+function demoStart(){
+  DEMO = true; S = blank(); S.script = "bmr";
+  const cast = [["Anna","grossmutter"],["Ben","zombuul"],["Cem","seemann"],["Dana","advokat"],["Eli","teedame"],["Finn","mondkind"],["Gül","gastwirt"],["Hanna","professor"]];
+  cast.forEach(([n,r]) => { const q = newPlayer(n); q.role = r; S.players.push(q); }); renumber();
+  S.bluffs = ["exorzist","narr","pazifist"]; S.phase = "day"; S.n = 2;
+  S.players[2].alive = false; setTag(S.players[6],"geschuetzt",true); setTag(S.players[0],"verbraucht",false);
+  S.notes = "Testaufbau zum Erklären. Oben auf „Demo beenden“ tippen, dann ist dein echtes Spiel wieder da.";
+  tab = "grim";
+}
+function demoEnd(){
+  DEMO = false; try{ localStorage.removeItem("grimoireDemo"); }catch(_){}
+  S = lsGet() || blank(); tab = "wiki"; setSaved("Testaufbau beendet");
+}
 function draw(){
   const n = S.players.length, d = DIST[n]; if (!d){ alertBox("Zufällig ziehen geht für 5 bis 15 Spieler."); return; }
   const ids = scriptRoleIds(), pool = t => ROLES.filter(r => r.team === t && ids.includes(r.id)).sort(() => Math.random() - .5);
@@ -2919,6 +2991,8 @@ document.addEventListener("click", async e => {
   switch (a){
     case "goSetup": tab = "setup"; break;
     case "demo": demo(); break;
+    case "demoStart": demoStart(); break;
+    case "demoEnd": demoEnd(); return render();
     case "add": { const v = document.getElementById("newName").value.trim(); if (!v) return; S.players.push(newPlayer(v)); renumber(); break; }
     case "del": S.players = S.players.filter(p => p.id !== pid); renumber(); break;
     case "up": { const i = S.players.findIndex(p => p.id === pid); if (i > 0){ [S.players[i-1], S.players[i]] = [S.players[i], S.players[i-1]]; renumber(); } break; }
@@ -3195,14 +3269,14 @@ document.addEventListener("click", e => {
   const bar = document.getElementById("resetBar");
   if (b.dataset.reset === "ask"){ bar.hidden = false; bar.scrollIntoView({block:"nearest"}); return; }
   if (b.dataset.reset === "no"){ bar.hidden = true; return; }
-  try{ ["grimoire","spieler","mode","grimTab","locked"].forEach(k => localStorage.removeItem(k)); }catch(_){}
-  S = blank(); Q = null; MODE = null; tab = "grim"; ptab = "ptable"; window._share = null;
+  try{ ["grimoire","grimoireDemo","erkl","spieler","mode","grimTab","locked"].forEach(k => localStorage.removeItem(k)); }catch(_){}
+  S = blank(); DEMO = false; Q = null; MODE = null; tab = "grim"; ptab = "ptable"; window._share = null;
   if (dbDoc) dbDoc.set({state: JSON.stringify(S), at: new Date().toISOString()}).catch(() => {});
   bar.hidden = true; document.getElementById("dlg").open && document.getElementById("dlg").close();
   render(); setSaved("zurückgesetzt");
 });
 /* ---------- Start ---------- */
-S = lsGet() || blank();
+S = (DEMO && (() => { try{ return JSON.parse(localStorage.getItem("grimoireDemo")); }catch(_){ return null; } })()) || lsGet() || blank();
 try{ tab = localStorage.getItem("grimTab") || "grim"; }catch(_){}
 render();
 initStore();
