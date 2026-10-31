@@ -3293,91 +3293,36 @@ document.addEventListener("click", e => {
 });
 /* ---------- Soundboard: Klänge per Web Audio erzeugt, Fernsteuerung per PeerJS ---------- */
 const SCENES = [["morgen","Morgen","🌅"],["diskussion","Diskussion","🗣️"],["nominierung","Nominierung","☝️"],["hinrichtung","Hinrichtung","🪓"],["nacht","Nacht","🌙"]];
-const SFX = [["glocke","Turmuhr (3 Schläge)","🔔"],["mitternacht","Mitternacht (12 Schläge)","🕛"],["donner","Donner","⛈️"],["wolf","Wolfsheulen","🐺"],["rabe","Rabe","🪶"],["herz","Herzschlag","🫀"],["geist","Geisterstimme","👻"],["fluestern","Flüstern","🤫"],["tuer","Knarrende Tür","🚪"]];
+const SFX = [["glocke","Turmuhr","🔔"],["mitternacht","Mitternacht (12 Schläge)","🕛"],["donner","Donner","⛈️"],["wolf","Wolfsheulen","🐺"],["rabe","Rabe","🪶"],["herz","Herzschlag","🫀"],["geist","Geist","👻"],["fluestern","Flüstern","🤫"],["tuer","Knarrende Tür","🚪"],["eule","Eule","🦉"],["lachen","Irres Lachen","😈"]];
 const SND = {ctx:null, master:null, noise:null, scene:"", stopScene:null, vol:0.8, role:"lokal", peer:null, conn:null, code:"", status:""};
 function aud(){
   if (!SND.ctx){
     const C = window.AudioContext || window.webkitAudioContext; SND.ctx = new C();
     SND.master = SND.ctx.createGain(); SND.master.gain.value = SND.vol; SND.master.connect(SND.ctx.destination);
-    const b = SND.ctx.createBuffer(1, SND.ctx.sampleRate * 2, SND.ctx.sampleRate), d = b.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    SND.noise = b;
   }
   if (SND.ctx.state === "suspended") SND.ctx.resume();
   return SND.ctx;
 }
-const rnd = (a, b) => a + Math.random() * (b - a);
-function osc(type, f, out, t0, t1){ const o = SND.ctx.createOscillator(); o.type = type; o.frequency.value = f; o.connect(out); o.start(t0 || SND.ctx.currentTime); if (t1) o.stop(t1); return o; }
 function gain(v, out){ const g = SND.ctx.createGain(); g.gain.value = v; g.connect(out); return g; }
-function filt(type, f, q, out){ const x = SND.ctx.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = q; x.connect(out); return x; }
-function noise(out, t0, t1){ const s = SND.ctx.createBufferSource(); s.buffer = SND.noise; s.loop = true; s.connect(out); s.start(t0 || SND.ctx.currentTime, Math.random() * 1.5); if (t1) s.stop(t1); return s; }
-function env(g, t, a, peak, d){ g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
-function lfo(f, depth, param){ return osc("sine", f, gain(depth, param)); }
-function echo(out, time, fb){ const i = gain(1, out), d = SND.ctx.createDelay(2); d.delayTime.value = time; i.connect(d); const g = gain(fb, d); d.connect(g); d.connect(out); return i; }
-function pad(out, keep, fs, type, vol, cut){ const f = filt("lowpass", cut, 0.7, gain(vol, out)); fs.forEach(x => { keep(osc(type, x, f)).detune.value = -7; keep(osc(type, x, f)).detune.value = 6; }); return f; }
-function tone(out, type, f, t, a, peak, d){ const g = gain(0, out); env(g, t, a, peak, d); return osc(type, f, g, t, t + a + d + 0.05); }
-function burst(out, t, a, peak, d){ const g = gain(0, out); env(g, t, a, peak, d); noise(g, t, t + a + d + 0.05); }
-function thump(out, t, peak, f){ const g = gain(0, out); env(g, t, 0.008, peak, 0.35); const o = osc("sine", f || 70, g, t, t + 0.45); o.frequency.setValueAtTime(f || 70, t); o.frequency.exponentialRampToValueAtTime((f || 70) * 0.55, t + 0.3); }
-function bird(out, t){ for (let i = 0, n = 2 + Math.random() * 3 | 0; i < n; i++){ const t0 = t + i * rnd(0.1, 0.18), f = rnd(2600, 4200); const o = tone(out, "sine", f, t0, 0.01, 0.03, 0.09); o.frequency.setValueAtTime(f, t0); o.frequency.exponentialRampToValueAtTime(f * rnd(1.2, 1.5), t0 + 0.08); } }
-function bell(out, t, base, peak){ [[0.5,.5],[1,1],[1.19,.6],[1.56,.4],[2,.35],[2.51,.25],[2.66,.2],[3.01,.15],[4.1,.1]].forEach(([r,a], i) => tone(out, "sine", base * r, t, 0.004, peak * a, 7 / (1 + i * 0.6))); }
-
-const BUILD = {
-  morgen(g, keep, every){
-    const f = pad(g, keep, [261.6, 329.6, 392, 493.9], "triangle", 0.045, 1400); keep(lfo(0.08, 500, f.frequency));
-    every(700, 2600, t => bird(g, t));
-  },
-  diskussion(g, keep, every){
-    const f = pad(g, keep, [73.4, 110, 146.8, 174.6], "sawtooth", 0.035, 450); keep(lfo(0.06, 220, f.frequency));
-    let tk = 0; const bp = filt("bandpass", 2500, 4, g);
-    every(1000, 1000, t => { bp.frequency.setValueAtTime(tk++ % 2 ? 1800 : 2800, t); burst(bp, t, 0.002, 0.5, 0.04); });
-  },
-  nominierung(g, keep, every){
-    const f = filt("lowpass", 280, 1, gain(0.09, g)); keep(osc("sawtooth", 55, f)); keep(osc("sawtooth", 77.8, f)).detune.value = 5; keep(lfo(0.2, 120, f.frequency));
-    every(850, 850, t => { thump(g, t, 0.7); thump(g, t + 0.24, 0.45); });
-  },
-  hinrichtung(g, keep, every){
-    pad(g, keep, [55, 65.4, 82.4], "sawtooth", 0.05, 260);
-    const lp = filt("lowpass", 300, 1, g);
-    every(1500, 1500, t => { thump(g, t, 0.9, 55); burst(lp, t, 0.005, 0.5, 0.4); });
-  },
-  nacht(g, keep, every){
-    const bp = filt("bandpass", 500, 0.8, g), wg = gain(0.22, bp); keep(noise(wg)); keep(lfo(0.07, 300, bp.frequency)); keep(lfo(0.11, 0.12, wg.gain));
-    const d = gain(0.05, g); keep(osc("sine", 49, d)); keep(osc("sine", 73.4, d));
-    every(2500, 6000, t => { for (let i = 0; i < 6; i++) tone(g, "sine", 4400, t + i * 0.035, 0.004, 0.012, 0.02); });
-    every(9000, 20000, t => { tone(g, "sine", 390, t, 0.08, 0.05, 0.35); tone(g, "sine", 360, t + 0.5, 0.08, 0.05, 0.5); });
-  }
-};
 function scene(id){
-  const c = aud(), t = c.currentTime, g = gain(0, SND.master), src = [], timers = [];
-  const keep = n => (src.push(n), n);
-  const every = (min, max, fn) => { const go = () => { fn(c.currentTime + 0.05); timers.push(setTimeout(go, rnd(min, max))); }; timers.push(setTimeout(go, rnd(300, 1200))); };
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 3);
-  BUILD[id](g, keep, every);
-  return () => { timers.forEach(clearTimeout); const n = c.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), n); g.gain.exponentialRampToValueAtTime(0.0001, n + 3);
-    setTimeout(() => { src.forEach(s => { try{ s.stop(); }catch(_){} }); g.disconnect(); }, 3300); };
+  const c = aud(), t = c.currentTime, g = gain(0, SND.master), a = new Audio("audio/" + id + ".mp3");
+  a.loop = true; a.preload = "auto"; c.createMediaElementSource(a).connect(g);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 3); a.play().catch(() => {});
+  return () => { const n = c.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), n); g.gain.exponentialRampToValueAtTime(0.0001, n + 3);
+    setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); }, 3300); };
 }
-const FX = {
-  glocke(t){ for (let i = 0; i < 3; i++) bell(SND.master, t + i * 2.4, 196, 0.12); },
-  mitternacht(t){ for (let i = 0; i < 12; i++) bell(SND.master, t + i * 2.2, 174.6, 0.12); },
-  donner(t){ const lp = filt("lowpass", 900, 0.7, SND.master); lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(90, t + 3); burst(lp, t, 0.03, 0.9, 3.5); burst(filt("highpass", 1500, 0.7, SND.master), t, 0.005, 0.25, 0.25); },
-  wolf(t){ const out = echo(filt("lowpass", 1400, 0.7, SND.master), 0.35, 0.35), g = gain(0, out);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.5); g.gain.setValueAtTime(0.12, t + 3); g.gain.exponentialRampToValueAtTime(0.0001, t + 4.2);
-    const o = osc("triangle", 300, g, t, t + 4.3); o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(560, t + 1); o.frequency.setValueAtTime(560, t + 2.4); o.frequency.exponentialRampToValueAtTime(330, t + 4.2);
-    const v = osc("sine", 5, gain(9, o.frequency), t, t + 4.3); },
-  rabe(t){ const bp = filt("bandpass", 1300, 2, SND.master); for (let i = 0; i < 3; i++){ const t0 = t + i * 0.45; const o = tone(bp, "sawtooth", 950, t0, 0.02, 0.35, 0.25); o.frequency.setValueAtTime(950, t0); o.frequency.exponentialRampToValueAtTime(650, t0 + 0.27); burst(bp, t0, 0.02, 0.15, 0.2); } },
-  herz(t){ for (let i = 0; i < 8; i++){ thump(SND.master, t + i * 0.9, 0.9); thump(SND.master, t + i * 0.9 + 0.24, 0.55); } },
-  geist(t){ const out = echo(SND.master, 0.42, 0.45), g = gain(0, out);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06, t + 1); g.gain.setValueAtTime(0.06, t + 3); g.gain.exponentialRampToValueAtTime(0.0001, t + 5);
-    [1, 1.5].forEach(m => { const o = osc("sine", 500 * m, g, t, t + 5.1); o.frequency.setValueAtTime(500 * m, t); o.frequency.exponentialRampToValueAtTime(880 * m, t + 1.8); o.frequency.exponentialRampToValueAtTime(420 * m, t + 5); osc("sine", 6, gain(15 * m, o.frequency), t, t + 5.1); }); },
-  fluestern(t){ let t0 = t; for (let i = 0; i < 14; i++){ const bp = filt("bandpass", rnd(2000, 4500), 2, SND.master), l = rnd(0.07, 0.22); burst(bp, t0, 0.03, 0.25, l); t0 += l + rnd(0.04, 0.2); } },
-  tuer(t){ const bp = filt("bandpass", 900, 5, SND.master), g = gain(0, bp); env(g, t, 0.15, 0.5, 2.2);
-    const o = osc("sawtooth", 40, g, t, t + 2.5); for (let i = 0; i <= 24; i++) o.frequency.linearRampToValueAtTime(rnd(28, 75), t + i * 0.1); }
-};
+const FXEL = {};
+function fx(id){
+  const c = aud(); let a = FXEL[id];
+  if (!a){ a = FXEL[id] = new Audio("audio/" + id + ".mp3"); a.preload = "auto"; c.createMediaElementSource(a).connect(SND.master); }
+  a.currentTime = 0; a.play().catch(() => {});
+}
+const BUILD = Object.fromEntries(SCENES.map(x => [x[0], 1]));
 function play(m){
   aud();
   if (m.k === "scene"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; if (SND.scene === m.v) SND.scene = ""; else if (BUILD[m.v]){ SND.scene = m.v; SND.stopScene = scene(m.v); } }
   else if (m.k === "stop"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; SND.scene = ""; }
-  else if (m.k === "fx" && FX[m.v]) FX[m.v](SND.ctx.currentTime + 0.05);
+  else if (m.k === "fx" && SFX.some(x => x[0] === m.v)) fx(m.v);
   else if (m.k === "vol"){ SND.vol = Math.max(0, Math.min(1, +m.v)); SND.master.gain.setTargetAtTime(SND.vol, SND.ctx.currentTime, 0.05); return; }
   sndState(); sndRefresh();
 }
@@ -3437,7 +3382,7 @@ function vSound(){
   <div class="card notip" style="margin-top:10px"><h3>Musik</h3><div class="row">${SCENES.map(([k,l,i]) => b("scene", k, l, i, SND.scene === k)).join("")}</div>
   <div class="row" style="margin-top:8px;align-items:center"><button class="btn" data-snd="stop" ${ok ? "" : "disabled"}>⏹ Musik aus</button><label class="small" style="flex:1;display:flex;gap:8px;align-items:center">Lautstärke <input type="range" id="sndVol" min="0" max="100" value="${Math.round(SND.vol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label></div></div>
   <div class="card notip" style="margin-top:10px"><h3>Effekte</h3><div class="row">${SFX.map(([k,l,i]) => b("fx", k, l, i)).join("")}</div></div>
-  <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. Die Hinrichtung hat eine eigene Trommel-Musik. Alle Klänge erzeugt die App selbst, sie spielen auch offline. Nur das Koppeln braucht Internet.</p>`;
+  <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin) und Wikimedia Commons.</p>`;
 }
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-snd]"); if (!t || MODE !== "spielleiter") return;
