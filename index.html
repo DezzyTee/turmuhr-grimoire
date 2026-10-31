@@ -3307,18 +3307,18 @@ function gain(v, out){ const g = SND.ctx.createGain(); g.gain.value = v; g.conne
 const XF = 4;
 function ramp(g, up, dur){ const n = SND.ctx.currentTime, v = g.gain.value; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(v, n); g.gain.linearRampToValueAtTime(up ? SND.mvol : 0, n + dur); }
 function scene(id, started){
-  const c = aud(), g = gain(0, SND.master); MUSICG.push(g); const a = new Audio("audio/" + id + ".mp3");
+  const c = aud(), g = gain(0, SND.master); MUSICG.push(g); const a = new Audio("audio/" + id + ".mp3?v=" + AV);
   a.loop = true; a.preload = "auto"; c.createMediaElementSource(a).connect(g);
   let go = false; const start = () => { if (go) return; go = true; ramp(g, true, XF); started(); };
   a.addEventListener("playing", start, {once:true}); setTimeout(start, 4000); a.play().catch(() => {});
   return () => { go = true; ramp(g, false, XF); setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); MUSICG.splice(MUSICG.indexOf(g), 1); }, XF * 1000 + 300); };
 }
-const FXEL = {}, LOOPS = {}, MUSICG = [];
+const FXEL = {}, LOOPS = {}, MUSICG = [], AV = "1793446249";
 const FXVOL = {enthauptung:.85, glocke:1, mitternacht:1, donner:.6, wolf:.4, rabe:.32, eule:.32, herz:.5, geist:.65, fluestern:.5, tuer:.45, lachen:.42};
 const fxBusy = () => Object.values(FXEL).filter(f => !f.a.paused && !f.a.ended).length;
 function fx(id){
   const c = aud(); let f = FXEL[id];
-  if (!f){ const a = new Audio("audio/" + id + ".mp3"); a.preload = "auto"; const g = gain(0, SND.master); c.createMediaElementSource(a).connect(g); f = FXEL[id] = {a, g}; }
+  if (!f){ const a = new Audio("audio/" + id + ".mp3?v=" + AV); a.preload = "auto"; const g = gain(0, SND.master); c.createMediaElementSource(a).connect(g); f = FXEL[id] = {a, g}; }
   const n = c.currentTime; f.g.gain.cancelScheduledValues(n); f.g.gain.setValueAtTime(0, n); f.g.gain.linearRampToValueAtTime(FXVOL[id] || .55, n + 0.4);
   f.a.currentTime = 0; f.a.play().catch(() => {});
 }
