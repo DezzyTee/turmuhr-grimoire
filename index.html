@@ -3293,8 +3293,8 @@ document.addEventListener("click", e => {
 });
 /* ---------- Soundboard: Klänge per Web Audio erzeugt, Fernsteuerung per PeerJS ---------- */
 const SCENES = [["morgen","Morgen","🌅"],["diskussion","Diskussion","🗣️"],["nominierung","Nominierung","☝️"],["hinrichtung","Hinrichtung","🪓"],["nacht","Nacht","🌙"]];
-const SFX = [["glocke","Turmuhr","🔔"],["mitternacht","Mitternacht (12 Schläge)","🕛"],["donner","Donner","⛈️"],["wolf","Wolfsheulen","🐺"],["rabe","Rabe","🪶"],["herz","Herzschlag","🫀"],["geist","Geist","👻"],["fluestern","Flüstern","🤫"],["tuer","Knarrende Tür","🚪"],["eule","Eule","🦉"],["lachen","Irres Lachen","😈"]];
-const SND = {ctx:null, master:null, noise:null, scene:"", stopScene:null, vol:0.8, role:"lokal", peer:null, conn:null, code:"", status:""};
+const SFX = [["enthauptung","Enthauptung","🪓"],["glocke","Turmuhr","🔔"],["mitternacht","Mitternacht (12 Schläge)","🕛"],["donner","Donner","⛈️"],["wolf","Wolfsheulen","🐺"],["rabe","Rabe","🪶"],["herz","Herzschlag","🫀"],["geist","Geist","👻"],["fluestern","Flüstern","🤫"],["tuer","Knarrende Tür","🚪"],["eule","Eule","🦉"],["lachen","Irres Lachen","😈"]];
+const SND = {ctx:null, master:null, noise:null, scene:"", stopScene:null, vol:0.4, mvol:0.75, role:"lokal", peer:null, conn:null, code:"", status:""};
 function aud(){
   if (!SND.ctx){
     const C = window.AudioContext || window.webkitAudioContext; SND.ctx = new C();
@@ -3305,16 +3305,16 @@ function aud(){
 }
 function gain(v, out){ const g = SND.ctx.createGain(); g.gain.value = v; g.connect(out); return g; }
 const XF = 4;
-function ramp(g, up, dur){ const n = SND.ctx.currentTime, v = g.gain.value; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(v, n); g.gain.linearRampToValueAtTime(up ? MUSICVOL : 0, n + dur); }
+function ramp(g, up, dur){ const n = SND.ctx.currentTime, v = g.gain.value; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(v, n); g.gain.linearRampToValueAtTime(up ? SND.mvol : 0, n + dur); }
 function scene(id, started){
-  const c = aud(), g = gain(0, SND.master), a = new Audio("audio/" + id + ".mp3");
+  const c = aud(), g = gain(0, SND.master); MUSICG.push(g); const a = new Audio("audio/" + id + ".mp3");
   a.loop = true; a.preload = "auto"; c.createMediaElementSource(a).connect(g);
   let go = false; const start = () => { if (go) return; go = true; ramp(g, true, XF); started(); };
   a.addEventListener("playing", start, {once:true}); setTimeout(start, 4000); a.play().catch(() => {});
-  return () => { go = true; ramp(g, false, XF); setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); }, XF * 1000 + 300); };
+  return () => { go = true; ramp(g, false, XF); setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); MUSICG.splice(MUSICG.indexOf(g), 1); }, XF * 1000 + 300); };
 }
-const FXEL = {}, LOOPS = {}, MUSICVOL = 0.75;
-const FXVOL = {glocke:.7, mitternacht:.7, donner:.6, wolf:.32, rabe:.32, eule:.32, herz:.5, geist:.65, fluestern:.5, tuer:.45, lachen:.42};
+const FXEL = {}, LOOPS = {}, MUSICG = [];
+const FXVOL = {enthauptung:.85, glocke:.7, mitternacht:.7, donner:.6, wolf:.4, rabe:.32, eule:.32, herz:.5, geist:.65, fluestern:.5, tuer:.45, lachen:.42};
 const fxBusy = () => Object.values(FXEL).filter(f => !f.a.paused && !f.a.ended).length;
 function fx(id){
   const c = aud(); let f = FXEL[id];
@@ -3324,7 +3324,7 @@ function fx(id){
 }
 function autoFx(id){
   if (LOOPS[id]){ clearTimeout(LOOPS[id]); delete LOOPS[id]; return; }
-  const next = wait => { LOOPS[id] = setTimeout(() => { if (fxBusy() >= 2) return next(3 + Math.random() * 5); fx(id); next(); }, (wait || 12 + Math.random() * 40) * 1000); };
+  const next = wait => { LOOPS[id] = setTimeout(() => { if (fxBusy() >= 2) return next(3 + Math.random() * 5); fx(id); next(); }, (wait || 35 + Math.random() * 55) * 1000); };
   if (fxBusy() < 2) fx(id); next();
 }
 const BUILD = Object.fromEntries(SCENES.map(x => [x[0], 1]));
@@ -3336,10 +3336,11 @@ function play(m){
   else if (m.k === "stop"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; SND.scene = ""; }
   else if (m.k === "fx" && SFX.some(x => x[0] === m.v)) fx(m.v);
   else if (m.k === "auto" && SFX.some(x => x[0] === m.v)) autoFx(m.v);
+  else if (m.k === "mvol"){ SND.mvol = Math.max(0, Math.min(1, +m.v)); if (SND.stopScene && MUSICG.length){ const g = MUSICG[MUSICG.length - 1]; g.gain.cancelScheduledValues(SND.ctx.currentTime); g.gain.setTargetAtTime(SND.mvol, SND.ctx.currentTime, 0.05); } return; }
   else if (m.k === "vol"){ SND.vol = Math.max(0, Math.min(1, +m.v)); SND.master.gain.setTargetAtTime(SND.vol, SND.ctx.currentTime, 0.05); return; }
   sndState(); sndRefresh();
 }
-function sndState(){ if (SND.role === "pc" && SND.conn && SND.conn.open) SND.conn.send({k:"state", scene:SND.scene, vol:SND.vol, loops:Object.keys(LOOPS)}); }
+function sndState(){ if (SND.role === "pc" && SND.conn && SND.conn.open) SND.conn.send({k:"state", scene:SND.scene, vol:SND.vol, mvol:SND.mvol, loops:Object.keys(LOOPS)}); }
 function sndDo(m){
   if (SND.role !== "fern") return play(m);
   if (SND.conn && SND.conn.open) SND.conn.send(m); else { SND.status = "Nicht verbunden. Tippe auf „Neu verbinden“."; sndRefresh(); }
@@ -3374,7 +3375,7 @@ function sndRemote(code){
   peer.on("open", () => {
     const c = SND.conn = peer.connect("turmuhr-" + code, {reliable:true});
     c.on("open", () => { SND.status = "Mit dem PC verbunden. Die Klänge spielen dort."; sndRefresh(); });
-    c.on("data", m => { if (!m) return; if (m.k === "busy") SND.status = "Der PC ist schon mit einer anderen Fernbedienung gekoppelt."; else if (m.k === "state"){ SND.scene = m.scene; SND.vol = m.vol; SND.loops = m.loops || []; } sndRefresh(); });
+    c.on("data", m => { if (!m) return; if (m.k === "busy") SND.status = "Der PC ist schon mit einer anderen Fernbedienung gekoppelt."; else if (m.k === "state"){ SND.scene = m.scene; SND.vol = m.vol; SND.mvol = m.mvol; SND.loops = m.loops || []; } sndRefresh(); });
     c.on("close", () => { if (SND.conn === c) SND.conn = null; if (!/gekoppelt/.test(SND.status)) SND.status = "Verbindung getrennt. Tippe auf „Neu verbinden“."; sndRefresh(); });
   });
   peer.on("error", e => { SND.status = e.type === "peer-unavailable" ? "Kein PC mit diesem Code gefunden. Läuft dort der Empfänger?" : e.type === "network" || e.type === "server-error" ? "Keine Verbindung zum Internet oder zum Vermittlungsdienst." : "Fehler: " + (e.type || e); sndRefresh(); });
@@ -3393,9 +3394,9 @@ function vSound(){
       <p><b>Am Handy:</b></p><div class="row"><input id="sndCode" type="text" maxlength="6" autocomplete="off" placeholder="Code vom PC" value="${esc(last)}" style="text-transform:uppercase;width:9em;font-family:monospace"><button class="btn pri" data-snd="remote">Mit PC verbinden</button></div>`;
   return `<div class="card notip"><h2>Soundboard</h2>${head}</div>
   <div class="card notip" style="margin-top:10px"><h3>Musik</h3><div class="row">${SCENES.map(([k,l,i]) => b("scene", k, l, i, SND.scene === k)).join("")}</div>
-  <div class="row" style="margin-top:8px;align-items:center"><button class="btn" data-snd="stop" ${ok ? "" : "disabled"}>⏹ Musik aus</button><label class="small" style="flex:1;display:flex;gap:8px;align-items:center">Lautstärke <input type="range" id="sndVol" min="0" max="100" value="${Math.round(SND.vol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label></div></div>
+  <div class="row" style="margin-top:8px;align-items:center"><button class="btn" data-snd="stop" ${ok ? "" : "disabled"}>⏹ Musik aus</button><label class="small" style="flex:1;display:flex;gap:8px;align-items:center">Gesamt <input type="range" id="sndVol" min="0" max="100" value="${Math.round(SND.vol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label><label class="small" style="flex:1;display:flex;gap:8px;align-items:center;min-width:200px">Musik <input type="range" id="sndMVol" min="0" max="100" value="${Math.round(SND.mvol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label></div></div>
   <div class="card notip" style="margin-top:10px"><h3>Effekte</h3><div class="row">${SFX.map(([k,l,i]) => { const on = SND.role === "fern" ? (SND.loops || []).includes(k) : !!LOOPS[k]; return `<div style="display:flex;flex:1 1 170px;gap:4px">${b("fx", k, l, i)}<button class="btn ${on ? "pri" : ""}" data-snd="auto" data-v="${k}" title="Zufällig wiederholen" aria-pressed="${on}" style="min-height:52px" ${ok ? "" : "disabled"}>🔁</button></div>`; }).join("")}</div></div>
-  <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. 🔁 neben einem Effekt spielt ihn ab und wiederholt ihn dann zufällig alle 12 bis 50 Sekunden, bis du ihn wieder ausschaltest. Es laufen dabei nie mehr als 2 Effekte gleichzeitig. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin) und Wikimedia Commons.</p>`;
+  <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. 🔁 neben einem Effekt spielt ihn ab und wiederholt ihn dann zufällig alle 35 bis 90 Sekunden, bis du ihn wieder ausschaltest. Es laufen dabei nie mehr als 2 Effekte gleichzeitig. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin) und Wikimedia Commons.</p>`;
 }
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-snd]"); if (!t || MODE !== "spielleiter") return;
@@ -3408,7 +3409,7 @@ document.addEventListener("click", e => {
   else if (k === "reconnect") sndRemote(SND.code);
   else if (k === "end") sndEnd();
 });
-document.addEventListener("input", e => { if (e.target.id === "sndVol" && MODE === "spielleiter") sndDo({k:"vol", v: e.target.value / 100}); });
+document.addEventListener("input", e => { if (MODE === "spielleiter" && (e.target.id === "sndVol" || e.target.id === "sndMVol")) sndDo({k: e.target.id === "sndVol" ? "vol" : "mvol", v: e.target.value / 100}); });
 
 /* ---------- Start ---------- */
 S = (DEMO && (() => { try{ return JSON.parse(localStorage.getItem("grimoireDemo")); }catch(_){ return null; } })()) || lsGet() || blank();
