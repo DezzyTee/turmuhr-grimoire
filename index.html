@@ -3383,24 +3383,32 @@ function sndPC(){
   let code = ""; try{ code = localStorage.getItem("sndCode") || ""; }catch(_){}
   if (!code){ code = Array.from({length:6}, () => CODECHARS[Math.random() * CODECHARS.length | 0]).join(""); try{ localStorage.setItem("sndCode", code); }catch(_){} }
   SND.role = "pc"; SND.code = code; SND.status = "Verbinde mit dem Vermittlungsdienst …"; sndRefresh();
-  const peer = SND.peer = new Peer("turmuhr-" + code);
-  peer.on("open", () => { SND.status = "Bereit. Gib den Code auf deinem Handy ein. Ton ist freigeschaltet."; sndRefresh(); });
+  pcPeer();
+}
+// Empfänger: gleicher Code für immer, bei jedem Abbruch selbst neu anmelden
+function pcPeer(){
+  if (SND.role !== "pc") return;
+  try{ SND.peer && SND.peer.destroy(); }catch(_){}
+  const peer = SND.peer = new Peer("turmuhr-" + SND.code);
+  peer.on("open", () => { SND.status = SND.conn && SND.conn.open ? "Fernbedienung verbunden." : "Bereit. Gib den Code auf deinem Handy ein. Ton ist freigeschaltet."; sndRefresh(); });
   peer.on("connection", c => {
-    const prev = SND.conn; if (prev) setTimeout(() => { try{ prev.close(); }catch(_){} }, 100);
+    const prev = SND.conn; if (prev && prev !== c) setTimeout(() => { try{ prev.close(); }catch(_){} }, 100);
     SND.conn = c;
     c.on("open", () => { SND.status = "Fernbedienung verbunden. Verbindet sie sich neu, übernimmt sie automatisch."; sndRefresh(); sndState(); });
     c.on("data", m => { if (m && m.k && m.k !== "state") play(m); });
-    c.on("close", () => { if (SND.conn !== c) return; SND.conn = null; SND.status = "Fernbedienung getrennt. Wartet auf eine neue Verbindung."; sndRefresh(); });
+    c.on("close", () => { if (SND.conn !== c) return; SND.conn = null; SND.status = "Fernbedienung getrennt. Wartet, sie verbindet sich gleich neu."; sndRefresh(); });
   });
-  peer.on("disconnected", () => { try{ peer.reconnect(); }catch(_){} });
-  peer.on("error", e => { SND.status = e.type === "unavailable-id" ? "Der Code ist noch belegt. Warte eine Minute und tippe erneut, oder erzeuge einen neuen Code." : e.type === "network" || e.type === "server-error" ? "Keine Verbindung zum Internet oder zum Vermittlungsdienst." : "Fehler: " + (e.type || e); sndRefresh(); });
+  peer.on("disconnected", () => { setTimeout(() => { if (SND.peer === peer && !peer.destroyed && peer.disconnected){ try{ peer.reconnect(); }catch(_){ } } }, 1000); });
+  peer.on("error", e => { if (SND.peer !== peer) return; SND.status = "Verbindung zum Vermittlungsdienst unterbrochen, versuche es erneut … (" + (e.type || e) + ")"; sndRefresh();
+    if (["unavailable-id","network","server-error","socket-error","socket-closed"].includes(e.type)) setTimeout(() => { if (SND.peer === peer) pcPeer(); }, 5000); });
 }
+setInterval(() => { if (SND.role === "pc" && SND.peer && (SND.peer.destroyed || (SND.peer.disconnected && !(SND.conn && SND.conn.open)))) pcPeer(); }, 15000);
 function sndRemote(code){
   code = (code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (code.length !== 6){ SND.status = "Der Code hat 6 Zeichen."; return sndRefresh(); }
   if (!window.Peer){ SND.status = "Die Verbindungs-Bibliothek fehlt."; return sndRefresh(); }
   sndEnd(true); SND.role = "fern"; SND.code = code; SND.status = "Verbinde mit dem PC …"; sndRefresh();
-  try{ localStorage.setItem("sndRemote", code); }catch(_){}
+  try{ localStorage.setItem("sndRemote", code); localStorage.setItem("sndRemoteOn", "1"); }catch(_){}
   const peer = SND.peer = new Peer();
   peer.on("open", () => {
     const c = SND.conn = peer.connect("turmuhr-" + code, {reliable:true});
@@ -3414,9 +3422,12 @@ function sndRemote(code){
 let sndBusy = false;
 function sndRetry(){ if (SND.role !== "fern" || !SND.code || sndBusy || (SND.conn && SND.conn.open)) return; sndBusy = true; setTimeout(() => sndBusy = false, 6000); sndRemote(SND.code); }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(sndRetry, 500); });
+window.addEventListener("pageshow", () => setTimeout(sndRetry, 500));
+// Handy wurde vom System beendet: Fernbedienung beim Start wiederherstellen
+try{ if (localStorage.getItem("sndRemoteOn") && localStorage.getItem("sndRemote") && !isLocked()){ SND.role = "fern"; SND.code = localStorage.getItem("sndRemote"); setTimeout(sndRetry, 1500); } }catch(_){}
 window.addEventListener("online", () => setTimeout(sndRetry, 500));
-setInterval(sndRetry, 8000);
-function sndEnd(quiet){ try{ SND.conn && SND.conn.close(); }catch(_){} try{ SND.peer && SND.peer.destroy(); }catch(_){} SND.conn = SND.peer = null; SND.role = "lokal"; SND.status = ""; if (!quiet) sndRefresh(); }
+setInterval(sndRetry, 5000);
+function sndEnd(quiet){ if (!quiet){ try{ localStorage.removeItem("sndRemoteOn"); }catch(_){} } try{ SND.conn && SND.conn.close(); }catch(_){} try{ SND.peer && SND.peer.destroy(); }catch(_){} SND.conn = SND.peer = null; SND.role = "lokal"; SND.status = ""; if (!quiet) sndRefresh(); }
 function vSound(){
   const ok = SND.role !== "fern" || !!(SND.conn && SND.conn.open);
   const b = (k, v, l, i, on) => `<button class="btn ${on ? "pri" : ""}" data-snd="${k}" data-v="${v}" style="min-height:52px;flex:1 1 130px" ${ok ? "" : "disabled"}>${i} ${l}</button>`;
