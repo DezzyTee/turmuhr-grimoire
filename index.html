@@ -3330,10 +3330,20 @@ function fx(id){
   const n = c.currentTime; f.g.gain.cancelScheduledValues(n); f.g.gain.setValueAtTime(0, n); const gr = groupOf(id); f.g.gain.linearRampToValueAtTime(WGAIN[gr[3]], n + (HITS.includes(gr[0]) ? 0.003 : 0.4));
   f.a.currentTime = 0; f.a.play().catch(() => {});
 }
-function autoFx(id){
-  if (LOOPS[id]){ clearTimeout(LOOPS[id]); delete LOOPS[id]; return; }
+function autoFx(id, later){
+  if (LOOPS[id]){ if (!later){ clearTimeout(LOOPS[id]); delete LOOPS[id]; } return; }
   const next = wait => { LOOPS[id] = setTimeout(() => { if (fxBusy() >= 2) return next(3 + Math.random() * 5); fxAny(id); next(); }, (wait || 35 + Math.random() * 55) * 1000); };
+  if (later) return next(8 + Math.random() * 20);
   if (fxBusy() < 2) fxAny(id); next();
+}
+// Phasenwechsel: Glocke, dann Musik, dann passende Effekte im Zufallsmodus
+const PHASEFX = {nacht: ["eule", "wolf"], morgen: ["voegel", "markt"]};
+function phase(id){
+  fxFadeAll();
+  const bell = id === "nacht" ? "mitternacht" : "glocke";
+  setTimeout(() => { fx(bell);
+    setTimeout(() => { if (SND.scene !== id) play({k:"scene", v:id, keep:true}); if (id === "morgen") setTimeout(() => fx("hahn"), 5000);
+      PHASEFX[id].forEach(g => autoFx(g, true)); sndState(); sndRefresh(); }, 3500); }, 300);
 }
 function fxFadeAll(){
   Object.keys(LOOPS).forEach(k => { clearTimeout(LOOPS[k]); delete LOOPS[k]; });
@@ -3342,7 +3352,7 @@ function fxFadeAll(){
 }
 function autoScene(id){
   const live = SND.role === "fern" ? !!(SND.conn && SND.conn.open) : !!SND.ctx;
-  if (live && SND.scene !== id) sndDo({k:"scene", v:id});
+  if (live && SND.scene !== id) sndDo({k: PHASEFX[id] ? "phase" : "scene", v:id});
 }
 function fxAny(g){ const gr = groupOf(g); fx(varId(g, Math.random() * gr[4] | 0)); }
 const BUILD = Object.fromEntries(SCENES.map(x => [x[0], 1]));
@@ -3350,9 +3360,10 @@ function play(m){
   aud();
   if (m.k === "scene"){ const old = SND.stopScene; SND.stopScene = null;
     if (SND.scene === m.v || !BUILD[m.v]){ SND.scene = ""; if (old) old(); }
-    else { if (m.v === "morgen") fxFadeAll(); SND.scene = m.v; SND.stopScene = scene(m.v, () => { if (old) old(); }); } }
+    else { if (m.v === "morgen" && !m.keep) fxFadeAll(); SND.scene = m.v; SND.stopScene = scene(m.v, () => { if (old) old(); }); } }
   else if (m.k === "stop"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; SND.scene = ""; }
   else if (m.k === "fx" && groupOf(m.v)) fx(m.v);
+  else if (m.k === "phase" && PHASEFX[m.v]) phase(m.v);
   else if (m.k === "autooff") Object.keys(LOOPS).forEach(k => { clearTimeout(LOOPS[k]); delete LOOPS[k]; });
   else if (m.k === "auto" && FXG.some(g => g[0] === m.v)) autoFx(m.v);
   else if (m.k === "mvol"){ SND.mvol = Math.max(0, Math.min(1, +m.v)); if (SND.stopScene && MUSICG.length){ const g = MUSICG[MUSICG.length - 1]; g.gain.cancelScheduledValues(SND.ctx.currentTime); g.gain.setTargetAtTime(SND.mvol, SND.ctx.currentTime, 0.05); } return; }
