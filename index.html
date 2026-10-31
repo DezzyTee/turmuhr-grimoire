@@ -3304,29 +3304,40 @@ function aud(){
   return SND.ctx;
 }
 function gain(v, out){ const g = SND.ctx.createGain(); g.gain.value = v; g.connect(out); return g; }
-function scene(id){
-  const c = aud(), t = c.currentTime, g = gain(0, SND.master), a = new Audio("audio/" + id + ".mp3");
+const XF = 4;
+function ramp(g, up, dur){ const n = SND.ctx.currentTime, v = g.gain.value; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(v, n); g.gain.linearRampToValueAtTime(up ? 1 : 0, n + dur); }
+function scene(id, started){
+  const c = aud(), g = gain(0, SND.master), a = new Audio("audio/" + id + ".mp3");
   a.loop = true; a.preload = "auto"; c.createMediaElementSource(a).connect(g);
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 3); a.play().catch(() => {});
-  return () => { const n = c.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), n); g.gain.exponentialRampToValueAtTime(0.0001, n + 3);
-    setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); }, 3300); };
+  let go = false; const start = () => { if (go) return; go = true; ramp(g, true, XF); started(); };
+  a.addEventListener("playing", start, {once:true}); setTimeout(start, 4000); a.play().catch(() => {});
+  return () => { go = true; ramp(g, false, XF); setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); }, XF * 1000 + 300); };
 }
-const FXEL = {};
+const FXEL = {}, LOOPS = {};
 function fx(id){
-  const c = aud(); let a = FXEL[id];
-  if (!a){ a = FXEL[id] = new Audio("audio/" + id + ".mp3"); a.preload = "auto"; c.createMediaElementSource(a).connect(SND.master); }
-  a.currentTime = 0; a.play().catch(() => {});
+  const c = aud(); let f = FXEL[id];
+  if (!f){ const a = new Audio("audio/" + id + ".mp3"); a.preload = "auto"; const g = gain(0, SND.master); c.createMediaElementSource(a).connect(g); f = FXEL[id] = {a, g}; }
+  const n = c.currentTime; f.g.gain.cancelScheduledValues(n); f.g.gain.setValueAtTime(0, n); f.g.gain.linearRampToValueAtTime(1, n + 0.4);
+  f.a.currentTime = 0; f.a.play().catch(() => {});
+}
+function autoFx(id){
+  if (LOOPS[id]){ clearTimeout(LOOPS[id]); delete LOOPS[id]; return; }
+  const next = () => { LOOPS[id] = setTimeout(() => { fx(id); next(); }, (12 + Math.random() * 40) * 1000); };
+  fx(id); next();
 }
 const BUILD = Object.fromEntries(SCENES.map(x => [x[0], 1]));
 function play(m){
   aud();
-  if (m.k === "scene"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; if (SND.scene === m.v) SND.scene = ""; else if (BUILD[m.v]){ SND.scene = m.v; SND.stopScene = scene(m.v); } }
+  if (m.k === "scene"){ const old = SND.stopScene; SND.stopScene = null;
+    if (SND.scene === m.v || !BUILD[m.v]){ SND.scene = ""; if (old) old(); }
+    else { SND.scene = m.v; SND.stopScene = scene(m.v, () => { if (old) old(); }); } }
   else if (m.k === "stop"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; SND.scene = ""; }
   else if (m.k === "fx" && SFX.some(x => x[0] === m.v)) fx(m.v);
+  else if (m.k === "auto" && SFX.some(x => x[0] === m.v)) autoFx(m.v);
   else if (m.k === "vol"){ SND.vol = Math.max(0, Math.min(1, +m.v)); SND.master.gain.setTargetAtTime(SND.vol, SND.ctx.currentTime, 0.05); return; }
   sndState(); sndRefresh();
 }
-function sndState(){ if (SND.role === "pc" && SND.conn && SND.conn.open) SND.conn.send({k:"state", scene:SND.scene, vol:SND.vol}); }
+function sndState(){ if (SND.role === "pc" && SND.conn && SND.conn.open) SND.conn.send({k:"state", scene:SND.scene, vol:SND.vol, loops:Object.keys(LOOPS)}); }
 function sndDo(m){
   if (SND.role !== "fern") return play(m);
   if (SND.conn && SND.conn.open) SND.conn.send(m); else { SND.status = "Nicht verbunden. Tippe auf „Neu verbinden“."; sndRefresh(); }
@@ -3361,7 +3372,7 @@ function sndRemote(code){
   peer.on("open", () => {
     const c = SND.conn = peer.connect("turmuhr-" + code, {reliable:true});
     c.on("open", () => { SND.status = "Mit dem PC verbunden. Die Klänge spielen dort."; sndRefresh(); });
-    c.on("data", m => { if (!m) return; if (m.k === "busy") SND.status = "Der PC ist schon mit einer anderen Fernbedienung gekoppelt."; else if (m.k === "state"){ SND.scene = m.scene; SND.vol = m.vol; } sndRefresh(); });
+    c.on("data", m => { if (!m) return; if (m.k === "busy") SND.status = "Der PC ist schon mit einer anderen Fernbedienung gekoppelt."; else if (m.k === "state"){ SND.scene = m.scene; SND.vol = m.vol; SND.loops = m.loops || []; } sndRefresh(); });
     c.on("close", () => { if (SND.conn === c) SND.conn = null; if (!/gekoppelt/.test(SND.status)) SND.status = "Verbindung getrennt. Tippe auf „Neu verbinden“."; sndRefresh(); });
   });
   peer.on("error", e => { SND.status = e.type === "peer-unavailable" ? "Kein PC mit diesem Code gefunden. Läuft dort der Empfänger?" : e.type === "network" || e.type === "server-error" ? "Keine Verbindung zum Internet oder zum Vermittlungsdienst." : "Fehler: " + (e.type || e); sndRefresh(); });
@@ -3381,13 +3392,13 @@ function vSound(){
   return `<div class="card notip"><h2>Soundboard</h2>${head}</div>
   <div class="card notip" style="margin-top:10px"><h3>Musik</h3><div class="row">${SCENES.map(([k,l,i]) => b("scene", k, l, i, SND.scene === k)).join("")}</div>
   <div class="row" style="margin-top:8px;align-items:center"><button class="btn" data-snd="stop" ${ok ? "" : "disabled"}>⏹ Musik aus</button><label class="small" style="flex:1;display:flex;gap:8px;align-items:center">Lautstärke <input type="range" id="sndVol" min="0" max="100" value="${Math.round(SND.vol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label></div></div>
-  <div class="card notip" style="margin-top:10px"><h3>Effekte</h3><div class="row">${SFX.map(([k,l,i]) => b("fx", k, l, i)).join("")}</div></div>
-  <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin) und Wikimedia Commons.</p>`;
+  <div class="card notip" style="margin-top:10px"><h3>Effekte</h3><div class="row">${SFX.map(([k,l,i]) => { const on = SND.role === "fern" ? (SND.loops || []).includes(k) : !!LOOPS[k]; return `<div style="display:flex;flex:1 1 170px;gap:4px">${b("fx", k, l, i)}<button class="btn ${on ? "pri" : ""}" data-snd="auto" data-v="${k}" title="Zufällig wiederholen" aria-pressed="${on}" style="min-height:52px" ${ok ? "" : "disabled"}>🔁</button></div>`; }).join("")}</div></div>
+  <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. 🔁 neben einem Effekt spielt ihn ab und wiederholt ihn dann zufällig alle 12 bis 50 Sekunden, bis du ihn wieder ausschaltest. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin) und Wikimedia Commons.</p>`;
 }
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-snd]"); if (!t || MODE !== "spielleiter") return;
   const k = t.dataset.snd, v = t.dataset.v;
-  if (k === "scene" || k === "fx") sndDo({k, v});
+  if (k === "scene" || k === "fx" || k === "auto") sndDo({k, v});
   else if (k === "stop") sndDo({k:"stop"});
   else if (k === "pc") sndPC();
   else if (k === "newcode"){ try{ localStorage.removeItem("sndCode"); }catch(_){} sndPC(); }
