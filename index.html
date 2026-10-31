@@ -2512,9 +2512,14 @@ function playerSelect(id, val, opts = {}){
   const list = S.players.filter(p => !(opts.notSelf && p.id === opts.self));
   return `<select id="${id}" data-k="${opts.k||""}"><option value="">–</option>${list.map(p => `<option value="${p.id}" ${p.id === val ? "selected" : ""}>${esc(p.seat)} · ${esc(p.name)}${p.alive ? "" : " †"}</option>`).join("")}</select>`;
 }
-function roleSelect(id, val, filter){
-  const groups = ["dorf","aussen","scherge","daemon"];
-  return `<select id="${id}"><option value="">–</option>${groups.map(g => `<optgroup label="${TEAMNAME[g]}">${ROLES.filter(r => r.team === g && visible(r) && (!filter || filter(r))).map(r => `<option value="${r.id}" ${r.id === val ? "selected" : ""}>${r.name}</option>`).join("")}</optgroup>`).join("")}</select>`;
+function roleMarks(self){
+  const m = {}; const add = (r, t) => { if (r) (m[r] = m[r] || []).push(t); };
+  S.players.forEach(p => { if (p.id === self) return; add(p.role, esc(p.name)); if (BELIEVER[p.role]) add(p.believes, "geglaubt von " + roleName(p.role)); });
+  return m;
+}
+function roleSelect(id, val, filter, self){
+  const groups = ["dorf","aussen","scherge","daemon"], mk = roleMarks(self);
+  return `<select id="${id}"><option value="">–</option>${groups.map(g => `<optgroup label="${TEAMNAME[g]}">${ROLES.filter(r => r.team === g && visible(r) && (!filter || filter(r))).map(r => `<option value="${r.id}" ${r.id === val ? "selected" : ""}>${r.name}${mk[r.id] ? " (" + mk[r.id].join(", ") + ")" : ""}</option>`).join("")}</optgroup>`).join("")}</select>`;
 }
 function inPlay(){ return new Set(S.players.map(p => p.role)); }
 
@@ -2700,8 +2705,8 @@ function vGrim(){
 const abil = id => R[id] ? `<div class="small muted notip" style="margin-top:3px;max-width:340px">${esc(R[id].ability)}</div>` : "";
 function vSetup(){
   const rows = S.players.map((p,i) => `<tr><td>${p.seat}</td><td><input type="text" id="nm_${p.id}" value="${esc(p.name)}" data-pf="name" data-pid="${p.id}" aria-label="Name Platz ${p.seat}"></td>
-    <td>${roleSelect("rl_"+p.id, p.role).replace("<select", `<select data-pf="role" data-pid="${p.id}"`)}${abil(p.role)}</td>
-    <td>${BELIEVER[p.role] ? roleSelect("bl_"+p.id, p.believes, r => r.team === BELIEVER[p.role]).replace("<select", `<select data-pf="believes" data-pid="${p.id}"`) + abil(p.believes) : ""}</td>
+    <td>${roleSelect("rl_"+p.id, p.role, null, p.id).replace("<select", `<select data-pf="role" data-pid="${p.id}"`)}${abil(p.role)}</td>
+    <td>${BELIEVER[p.role] ? roleSelect("bl_"+p.id, p.believes, r => r.team === BELIEVER[p.role], p.id).replace("<select", `<select data-pf="believes" data-pid="${p.id}"`) + abil(p.believes) : ""}</td>
     <td><button class="btn sm" data-act="up" data-pid="${p.id}" aria-label="nach oben">↑</button> <button class="btn sm bad" data-act="del" data-pid="${p.id}" aria-label="entfernen">×</button></td></tr>`).join("");
   const n = S.players.length, su = SETUPS.find(s => s.n === n);
   const counts = {dorf:0,aussen:0,scherge:0,daemon:0}; S.players.forEach(p => p.role && counts[team(p)]++);
