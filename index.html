@@ -3386,11 +3386,11 @@ function sndPC(){
   const peer = SND.peer = new Peer("turmuhr-" + code);
   peer.on("open", () => { SND.status = "Bereit. Gib den Code auf deinem Handy ein. Ton ist freigeschaltet."; sndRefresh(); });
   peer.on("connection", c => {
-    if (SND.conn && SND.conn.open){ c.on("open", () => { c.send({k:"busy"}); setTimeout(() => c.close(), 600); }); return; }
+    const prev = SND.conn; if (prev) setTimeout(() => { try{ prev.close(); }catch(_){} }, 100);
     SND.conn = c;
-    c.on("open", () => { SND.status = "Fernbedienung verbunden. Andere Geräte werden abgewiesen."; sndRefresh(); sndState(); });
+    c.on("open", () => { SND.status = "Fernbedienung verbunden. Verbindet sie sich neu, übernimmt sie automatisch."; sndRefresh(); sndState(); });
     c.on("data", m => { if (m && m.k && m.k !== "state") play(m); });
-    c.on("close", () => { if (SND.conn === c) SND.conn = null; SND.status = "Fernbedienung getrennt. Wartet auf eine neue Verbindung."; sndRefresh(); });
+    c.on("close", () => { if (SND.conn !== c) return; SND.conn = null; SND.status = "Fernbedienung getrennt. Wartet auf eine neue Verbindung."; sndRefresh(); });
   });
   peer.on("disconnected", () => { try{ peer.reconnect(); }catch(_){} });
   peer.on("error", e => { SND.status = e.type === "unavailable-id" ? "Der Code ist noch belegt. Warte eine Minute und tippe erneut, oder erzeuge einen neuen Code." : e.type === "network" || e.type === "server-error" ? "Keine Verbindung zum Internet oder zum Vermittlungsdienst." : "Fehler: " + (e.type || e); sndRefresh(); });
@@ -3410,6 +3410,12 @@ function sndRemote(code){
   });
   peer.on("error", e => { SND.status = e.type === "peer-unavailable" ? "Kein PC mit diesem Code gefunden. Läuft dort der Empfänger?" : e.type === "network" || e.type === "server-error" ? "Keine Verbindung zum Internet oder zum Vermittlungsdienst." : "Fehler: " + (e.type || e); sndRefresh(); });
 }
+// Handy: nach Sperre oder Verbindungsabbruch automatisch neu verbinden
+let sndBusy = false;
+function sndRetry(){ if (SND.role !== "fern" || !SND.code || sndBusy || (SND.conn && SND.conn.open)) return; sndBusy = true; setTimeout(() => sndBusy = false, 6000); sndRemote(SND.code); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(sndRetry, 500); });
+window.addEventListener("online", () => setTimeout(sndRetry, 500));
+setInterval(sndRetry, 8000);
 function sndEnd(quiet){ try{ SND.conn && SND.conn.close(); }catch(_){} try{ SND.peer && SND.peer.destroy(); }catch(_){} SND.conn = SND.peer = null; SND.role = "lokal"; SND.status = ""; if (!quiet) sndRefresh(); }
 function vSound(){
   const ok = SND.role !== "fern" || !!(SND.conn && SND.conn.open);
