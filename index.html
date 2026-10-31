@@ -2999,7 +2999,7 @@ document.addEventListener("click", async e => {
   if (MODE !== "spielleiter") return;
   const t = e.target.closest("[data-tab],[data-act],[data-open],[data-voter],[data-manual]"); if (!t) return;
   if (t.dataset.manual){ const m = S._manual = S._manual || []; const i = m.indexOf(t.dataset.manual); i < 0 ? m.push(t.dataset.manual) : m.splice(i,1); save(); return render(); }
-  if (t.dataset.tab){ tab = t.dataset.tab; try{ localStorage.setItem("grimTab", tab); }catch(_){} return render(); }
+  if (t.dataset.tab){ tab = t.dataset.tab; if (tab === "talk" && S.phase === "day" && SND.scene === "morgen") autoScene("diskussion"); try{ localStorage.setItem("grimTab", tab); }catch(_){} return render(); }
   if (t.dataset.open){ return openSheet(t.dataset.open); }
   if (t.dataset.voter){ const c = S._nom = S._nom || {}; c.voters = c.voters || []; const i = c.voters.indexOf(t.dataset.voter); i < 0 ? c.voters.push(t.dataset.voter) : c.voters.splice(i,1); return render(); }
   const a = t.dataset.act, pid = t.dataset.pid;
@@ -3021,22 +3021,22 @@ document.addEventListener("click", async e => {
     case "copyShare": { const el = document.getElementById("shareUrl"); try{ await navigator.clipboard.writeText(el.value); t.textContent = "Kopiert"; }catch(_){ el.select(); } return; }
     case "shuffle": applySetup(true); break;
     case "autoBluff": { const used = inPlay(); const drunkB = S.players.filter(p => BELIEVER[p.role]).map(p => p.believes); const pool = ROLES.filter(r => r.team === "dorf" && scriptRoleIds().includes(r.id) && !used.has(r.id) && !drunkB.includes(r.id)).sort(() => Math.random() - .5); S.bluffs = pool.slice(0,3).map(r => r.id); break; }
-    case "start": if (S.players.some(p => !p.role)) { alertBox("Jeder Spieler braucht eine Rolle."); return; } S.phase = "night"; S.n = 1; log("Erste Nacht beginnt"); tab = "night"; break;
-    case "toDay1": S.phase = "day"; S.n = 1; S.dawn = "Tag 1: Niemand ist gestorben."; log("Tag 1 beginnt"); tab = "talk"; break;
+    case "start": if (S.players.some(p => !p.role)) { alertBox("Jeder Spieler braucht eine Rolle."); return; } autoScene("nacht"); S.phase = "night"; S.n = 1; log("Erste Nacht beginnt"); tab = "night"; break;
+    case "toDay1": autoScene("morgen"); S.phase = "day"; S.n = 1; S.dawn = "Tag 1: Niemand ist gestorben."; log("Tag 1 beginnt"); tab = "talk"; break;
     case "timer": { clearInterval(tmr); let s = +t.dataset.sec; const el = document.getElementById("tmr"); tmr = setInterval(() => { s--; if (el) el.textContent = Math.floor(Math.max(s,0)/60) + ":" + String(Math.max(s,0)%60).padStart(2,"0"); if (s <= 0){ clearInterval(tmr); try{ navigator.vibrate && navigator.vibrate(300); }catch(_){} } }, 1000); return; }
-    case "saveNom": { const c = S._nom; const votes = (c.voters||[]).length; c.voters.forEach(id => { const p = P(id); if (p && !p.alive) p.ghost = false; }); S.noms.push({day:S.n, by:c.by, on:c.on, votes}); log(`${nm(c.by)} nominiert ${nm(c.on)}: ${votes} Stimmen`, c.on); S._nom = {}; break; }
+    case "saveNom": autoScene("nominierung"); { const c = S._nom; const votes = (c.voters||[]).length; c.voters.forEach(id => { const p = P(id); if (p && !p.alive) p.ghost = false; }); S.noms.push({day:S.n, by:c.by, on:c.on, votes}); log(`${nm(c.by)} nominiert ${nm(c.on)}: ${votes} Stimmen`, c.on); S._nom = {}; break; }
     case "virgin": { const c = S._nom, v = P(c.on), by = P(c.by); setTag(v,"verbraucht",true); if (team(by) === "dorf" && by.role !== "trunkenbold" && !impaired(v)){ kill(by,"Jungfrau"); S.executed[S.n] = by.id; log(`Jungfrau: ${by.name} sofort hingerichtet`, by.id); checkWin(); } else log(`Jungfrau nominiert von ${by.name}: nichts passiert`, v.id); S._nom = {}; break; }
-    case "execute": { const p = P(pid); const before = alive().length; kill(p, "hingerichtet"); S.executed[S.n] = p.id;
+    case "execute": { autoScene("hinrichtung"); const p = P(pid); const before = alive().length; kill(p, "hingerichtet"); S.executed[S.n] = p.id;
       if (p.role === "heiliger" && !has(p,"vergiftet")) { S.win = "Böse gewinnt: Der Heilige wurde hingerichtet."; log(S.win); }
       else if (p.role === "imp"){ const sw = S.players.find(q => q.alive && q.role === "scharlachrote_frau" && !has(q,"vergiftet")); if (sw && before >= 5){ sw.formerRole = sw.role; sw.role = "imp"; sw.newImp = true; sw.newImpFromSW = true; log(`${sw.name} (Scharlachrote Frau) wird Imp`, sw.id); } else checkWin(); }
       else checkWin(); break; }
-    case "toNight": S.phase = "night"; S.n += 1; S._res = null; S._mayor = null; S._mayorTo = null; log(`Nacht ${S.n} beginnt`); tab = "night"; break;
+    case "toNight": autoScene("nacht"); S.phase = "night"; S.n += 1; S._res = null; S._mayor = null; S._mayorTo = null; log(`Nacht ${S.n} beginnt`); tab = "night"; break;
     case "resolve": case "reresolve": { S._heir = null; S._mayor = null; if (a === "resolve") S._manual = []; const r = resolveNight(); S._res = {steps:r.steps, deaths:r.deaths.map(p => p.id)};
       // Info-Rollen wachen nach dem Imp auf: Opfer dieser Nacht zählen schon als tot
       r.deaths.forEach(p => p._was = p.alive); r.deaths.forEach(p => p.alive = false);
       S.info[S.n] = {}; S.players.forEach(p => { const s = infoFor(p); if (s) S.info[S.n][p.id] = s; });
       r.deaths.forEach(p => { p.alive = p._was; delete p._was; }); break; }
-    case "dawn": { const ids = (S._res && S._res.deaths) || []; const dead = ids.map(id => (S._mayor === id && S._mayorTo) ? P(S._mayorTo) : P(id));
+    case "dawn": { autoScene("morgen"); const ids = (S._res && S._res.deaths) || []; const dead = ids.map(id => (S._mayor === id && S._mayorTo) ? P(S._mayorTo) : P(id));
       if (S._heir){ const h = P(S._heir); h.formerRole = h.role; h.role = "imp"; h.newImp = true; log(`${h.name} wird neuer Imp`, h.id); S._heir = null; }
       (S._manual || []).forEach(id => { const q = P(id); if (q && !dead.includes(q)) dead.push(q); }); S._manual = [];
       dead.forEach(p => kill(p, "Nacht " + S.n));
@@ -3297,7 +3297,8 @@ const SCENES = [["morgen","Morgen","🌅"],["diskussion","Diskussion","🗣️"]
 const FXG = [["enthauptung","Enthauptung","🪓",5,7],["genick","Genickbruch","🦴",5,4],["stich","Messerstich","🔪",5,4],["glocke","Turmuhr","🔔",5,1],["mitternacht","Mitternacht (12 Schläge)","🕛",5,1],
   ["daemon","Dämon","👹",4,4],["donner","Donner","⛈️",4,1],["lachen","Irres Lachen","😈",4,1],
   ["geist","Geist","👻",3,1],["herz","Herzschlag","🫀",3,1],["tuer","Knarrende Tür","🚪",3,1],["fluestern","Flüstern","🤫",3,1],
-  ["wolf","Wolfsheulen","🐺",2,1],["rabe","Rabe","🪶",2,1],["eule","Eule","🦉",1,1]];
+  ["wolf","Wolfsheulen","🐺",2,1],["rabe","Rabe","🪶",2,1],["eule","Eule","🦉",1,1],
+  ["hahn","Hahn","🐓",3,1,1],["voegel","Vogelgezwitscher","🐦",2,3,1],["markt","Marktplatz","🧺",2,1,1],["schafe","Schafe","🐑",2,1,1],["kuh","Kuh","🐄",2,1,1]];
 const WGAIN = {1:.12, 2:.22, 3:.4, 4:.65, 5:1}, HITS = ["enthauptung","genick","stich"];
 const varId = (g, i) => i ? g + (i + 1) : g;
 const groupOf = id => FXG.find(g => id === g[0] || (id.startsWith(g[0]) && /^\d+$/.test(id.slice(g[0].length))));
@@ -3321,7 +3322,7 @@ function scene(id, started){
   a.addEventListener("playing", start, {once:true}); setTimeout(start, 4000); a.play().catch(() => {});
   return () => { go = true; ramp(g, false, XF); setTimeout(() => { a.pause(); a.removeAttribute("src"); a.load(); g.disconnect(); MUSICG.splice(MUSICG.indexOf(g), 1); }, XF * 1000 + 300); };
 }
-const FXEL = {}, LOOPS = {}, MUSICG = [], AV = "1793447586";
+const FXEL = {}, LOOPS = {}, MUSICG = [], AV = "1793447807";
 const fxBusy = () => Object.values(FXEL).filter(f => !f.a.paused && !f.a.ended).length;
 function fx(id){
   const c = aud(); let f = FXEL[id];
@@ -3334,13 +3335,22 @@ function autoFx(id){
   const next = wait => { LOOPS[id] = setTimeout(() => { if (fxBusy() >= 2) return next(3 + Math.random() * 5); fxAny(id); next(); }, (wait || 35 + Math.random() * 55) * 1000); };
   if (fxBusy() < 2) fxAny(id); next();
 }
+function fxFadeAll(){
+  Object.keys(LOOPS).forEach(k => { clearTimeout(LOOPS[k]); delete LOOPS[k]; });
+  const n = SND.ctx.currentTime;
+  Object.values(FXEL).forEach(f => { if (f.a.paused || f.a.ended) return; f.g.gain.cancelScheduledValues(n); f.g.gain.setValueAtTime(f.g.gain.value, n); f.g.gain.linearRampToValueAtTime(0, n + 2.5); setTimeout(() => f.a.pause(), 2600); });
+}
+function autoScene(id){
+  const live = SND.role === "fern" ? !!(SND.conn && SND.conn.open) : !!SND.ctx;
+  if (live && SND.scene !== id) sndDo({k:"scene", v:id});
+}
 function fxAny(g){ const gr = groupOf(g); fx(varId(g, Math.random() * gr[4] | 0)); }
 const BUILD = Object.fromEntries(SCENES.map(x => [x[0], 1]));
 function play(m){
   aud();
   if (m.k === "scene"){ const old = SND.stopScene; SND.stopScene = null;
     if (SND.scene === m.v || !BUILD[m.v]){ SND.scene = ""; if (old) old(); }
-    else { SND.scene = m.v; SND.stopScene = scene(m.v, () => { if (old) old(); }); } }
+    else { if (m.v === "morgen") fxFadeAll(); SND.scene = m.v; SND.stopScene = scene(m.v, () => { if (old) old(); }); } }
   else if (m.k === "stop"){ if (SND.stopScene) SND.stopScene(); SND.stopScene = null; SND.scene = ""; }
   else if (m.k === "fx" && groupOf(m.v)) fx(m.v);
   else if (m.k === "autooff") Object.keys(LOOPS).forEach(k => { clearTimeout(LOOPS[k]); delete LOOPS[k]; });
@@ -3404,8 +3414,9 @@ function vSound(){
   return `<div class="card notip"><h2>Soundboard</h2>${head}</div>
   <div class="card notip" style="margin-top:10px"><h3>Musik</h3><div class="row">${SCENES.map(([k,l,i]) => b("scene", k, l, i, SND.scene === k)).join("")}</div>
   <div class="row" style="margin-top:8px;align-items:center"><button class="btn" data-snd="stop" ${ok ? "" : "disabled"}>⏹ Musik aus</button><label class="small" style="flex:1;display:flex;gap:8px;align-items:center">Gesamt <input type="range" id="sndVol" min="0" max="100" value="${Math.round(SND.vol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label><label class="small" style="flex:1;display:flex;gap:8px;align-items:center;min-width:200px">Musik <input type="range" id="sndMVol" min="0" max="100" value="${Math.round(SND.mvol * 100)}" style="flex:1" ${ok ? "" : "disabled"}></label></div></div>
-  <div class="card notip" style="margin-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Effekte</h3><button class="btn" data-snd="autooff" ${ok ? "" : "disabled"}>🔁 Alle aus</button></div><div class="row">${FXG.map(([k,l,ic,w,n]) => { const on = SND.role === "fern" ? (SND.loops || []).includes(k) : !!LOOPS[k], v = Math.min(VAR[k] || 0, n - 1);
-    return `<div style="display:flex;flex:1 1 260px;gap:4px">${b("fx", varId(k, v), l + ` <span class="small" style="opacity:.6;letter-spacing:-1px">${"●".repeat(w)}</span>`, ic)}${n > 1 ? `<select data-sndvar="${k}" aria-label="Variante ${l}" style="width:auto" ${ok ? "" : "disabled"}>${Array.from({length:n}, (_, x) => `<option value="${x}" ${x === v ? "selected" : ""}>${"ABCDEFG"[x]}</option>`).join("")}</select>` : ""}<button class="btn ${on ? "pri" : ""}" data-snd="auto" data-v="${k}" title="Zufällig wiederholen" aria-pressed="${on}" style="min-height:52px" ${ok ? "" : "disabled"}>🔁</button></div>`; }).join("")}</div></div>
+  <div class="card notip" style="margin-top:10px"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Effekte</h3><button class="btn" data-snd="autooff" ${ok ? "" : "disabled"}>🔁 Alle aus</button></div><div>${[false, true].map(day => `${day ? `<h3 style="margin:12px 0 6px">Tagsüber</h3>` : ""}<div class="row">${FXG.filter(g => !!g[5] === day).map(([k,l,ic,w,n]) => { const on = SND.role === "fern" ? (SND.loops || []).includes(k) : !!LOOPS[k], v = Math.min(VAR[k] || 0, n - 1);
+    const opts = Array.from({length:n}, (_, x) => `<option value="${x}" ${x === v ? "selected" : ""}>${"ABCDEFG"[x]}</option>`).join("");
+    return `<div style="display:flex;flex:1 1 260px;gap:4px">${b("fx", varId(k, v), l + ` <span class="small" style="opacity:.6;letter-spacing:-1px">${"●".repeat(w)}</span>`, ic)}${n > 1 ? `<select data-sndvar="${k}" aria-label="Variante ${l}" style="width:auto" ${ok ? "" : "disabled"}>${opts}</select>` : ""}<button class="btn ${on ? "pri" : ""}" data-snd="auto" data-v="${k}" title="Zufällig wiederholen" aria-pressed="${on}" style="min-height:52px" ${ok ? "" : "disabled"}>🔁</button></div>`; }).join("")}</div>`).join("")}</div></div>
   <p class="small muted">Musik blendet sanft über. Tippst du auf die laufende Musik, geht sie aus. 🔁 neben einem Effekt spielt ihn ab und wiederholt ihn dann zufällig alle 35 bis 90 Sekunden, bis du ihn wieder ausschaltest. Es laufen dabei nie mehr als 2 Effekte gleichzeitig, bei mehreren Varianten wird jedes Mal zufällig eine gewählt. Die Punkte zeigen das Gewicht: ●●●●● ist wichtig und laut, ● leise im Hintergrund. Mit A, B, C … wählst du die Variante. Die Hinrichtung hat eine eigene Musik. Der PC lädt die Klänge beim ersten Abspielen aus dem Internet. Musik: Kevin MacLeod (incompetech.com), CC BY 4.0. Effekte: BigSoundBank (Joseph Sardin), Wikimedia Commons, Freesound (sbda, SilverIllusionist, newlocknew, Smice_6, SoundFlakes, CGEffex, Clearwavsound, huluvu42, Alejandrodiaz17, gagglepod, jawbutch, nayahnaidoo, InspectorJ, LittleRobotSoundFactory, La_Parca, MAJ061785, JW_Audio).</p>`;
 }
 document.addEventListener("click", e => {
